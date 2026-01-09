@@ -1,45 +1,32 @@
 # Agent Instructions
 
-## mitmproxy Setup & Cleanup
+## Project: Plunge
 
-### Disable Proxy When Done
+Pool control app for Pentair ScreenLogic/IntelliCenter systems.
 
-```bash
-# Turn off HTTP/HTTPS proxy
-networksetup -setwebproxystate "Wi-Fi" off
-networksetup -setsecurewebproxystate "Wi-Fi" off
-```
-
-### Remove mitmproxy Certificate
+### Quick Commands
 
 ```bash
-# Remove the trusted certificate from System keychain
-sudo security delete-certificate -c mitmproxy -t /Library/Keychains/System.keychain
+# Check pool status
+node pool-status.js
+
+# Control pool (see help)
+node pool-control.js help
+
+# Get raw status JSON
+node pool-control.js raw
+
+# Toggle a circuit
+node pool-control.js circuit 6 on   # Turn on Pool
+node pool-control.js circuit 4 on   # Turn on Lights
 ```
 
-### Re-enable Proxy for Traffic Capture
+### Credentials
 
-```bash
-# Start mitmweb (web UI)
-mitmweb
+- Stored in `config.local.js` (gitignored, local only)
+- Never commit credentials to the repo
 
-# Or start mitmproxy (terminal UI)
-mitmproxy
+### Development
 
-# Enable proxy (port 8080 is default)
-networksetup -setwebproxy "Wi-Fi" 127.0.0.1 8080
-networksetup -setsecurewebproxy "Wi-Fi" 127.0.0.1 8080
-```
-
-### Install Certificate (if needed again)
-
-```bash
-sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ~/.mitmproxy/mitmproxy-ca-cert.pem
-```
-
-## Security Notes
-
-- The mitmproxy CA certificate allows interception of ALL HTTPS traffic while trusted
-- Only keep it installed while actively debugging
-- The private key is stored at `~/.mitmproxy/`
-- Remove the certificate when not in use
+- Branch: `dev` for development, `main` for stable
+- Design docs in `design-docs/`
