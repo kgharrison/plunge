@@ -1,0 +1,17 @@
+{
+  "name": "plunge",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "node-intellicenter": "^0.5.3",
+    "node-screenlogic": "^2.1.1"
+  }
+}
