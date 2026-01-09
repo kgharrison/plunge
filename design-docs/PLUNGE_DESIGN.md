@@ -64,37 +64,116 @@ Plunge is a custom pool control application for Pentair IntelliCenter/ScreenLogi
 
 ## Your Pool Setup
 
-Based on discovery (Jan 9, 2025):
+Based on API discovery (Jan 9, 2025):
 
-### Equipment
-- **Controller:** ScreenLogic v5.2 Build 738.0
-- **Connection:** Remote via Pentair Cloud
-- **System Name:** `Pentair: F8-23-4F`
+### System Info
+| Component | Details |
+|-----------|---------|
+| **Controller** | ScreenLogic v5.2 Build 738.0 |
+| **Connection** | Remote via Pentair Cloud |
+| **System Name** | `Pentair: F8-23-4F` |
+| **Pump** | IntelliFlo VS (450-3450 RPM, variable speed) |
+| **Heating** | Solar ✅ |
+| **Lights** | 2x IntelliBrite (8 colors) |
+| **Chlorinator** | None |
+| **Chemistry** | None |
 
-### Bodies
-| Body | Current | Set Point |
-|------|---------|-----------|
-| Pool | 52°F | 89°F |
-| Spa | 67°F | 101°F |
+### Temperature Ranges
+| Body | Min | Max |
+|------|-----|-----|
+| Pool | 40°F | 104°F |
+| Spa | 40°F | 104°F |
 
-### Circuits
-| ID | Name | Function |
-|----|------|----------|
-| 1 | Spa | Spa mode |
-| 2 | Polaris | Pool cleaner |
-| 3 | Jets | Spa jets |
-| 4 | Lights | IntelliBrite pool lights |
-| 5 | Waterfall Light | IntelliBrite |
-| 6 | Pool | Main pool pump |
-| 7 | Waterfall | Water feature |
-| 8 | High Speed | High speed pump mode |
+### Circuits (8 total)
+| ID | Name | Type | Pump Speed | Interface |
+|----|------|------|------------|-----------|
+| 1 | Spa | Spa mode | 3000 RPM | Spa side |
+| 2 | Polaris | Cleaner | 2000 RPM | Feature |
+| 3 | Jets | Generic | - | Feature |
+| 4 | Lights | IntelliBrite | - | Light |
+| 5 | Waterfall Light | IntelliBrite | - | Light |
+| 6 | Pool | Pool mode | 1000 RPM | Pool |
+| 7 | Waterfall | Generic | - | Feature |
+| 8 | High Speed | Generic | 2850 RPM | Feature |
 
-### Features Detected
-- ✅ Solar heating
-- ✅ IntelliBrite color lights
-- ✅ IntelliFlow variable speed pump
-- ❌ No salt chlorinator detected
-- ❌ No IntelliChem detected
+### IntelliBrite Colors
+| Color | RGB |
+|-------|-----|
+| White | rgb(255, 255, 255) |
+| Light Green | rgb(160, 255, 160) |
+| Green | rgb(0, 255, 80) |
+| Cyan | rgb(0, 255, 200) |
+| Blue | rgb(100, 140, 255) |
+| Lavender | rgb(230, 130, 255) |
+| Magenta | rgb(255, 0, 128) |
+| Light Magenta | rgb(255, 180, 210) |
+
+### Pump Configuration (IntelliFlo VS)
+| Circuit | Speed |
+|---------|-------|
+| Pool (6) | 1000 RPM |
+| Polaris (2) | 2000 RPM |
+| High Speed (8) | 2850 RPM |
+| Spa (1) | 3000 RPM |
+| Special circuits | 2600-2850 RPM |
+
+Priming: 2300 RPM for 1 minute
+
+### Equipment Flags
+- ✅ `POOL_SOLARPRESENT` - Solar heating available
+- ✅ `POOL_IBRITEPRESENT` - IntelliBrite lights
+- ✅ `POOL_IFLOWPRESENT0` - IntelliFlow pump
+- ❌ `POOL_CHLORPRESENT` - No salt chlorinator
+- ❌ `POOL_ICHEMPRESENT` - No IntelliChem
+
+### Valves
+- Valve A (Load Center 1)
+- Valve B (Device ID 41)
+
+---
+
+## API Capabilities
+
+### Available Data (Read)
+| Endpoint | Data |
+|----------|------|
+| Equipment State | Air temp, body temps, circuit states, freeze mode |
+| Controller Config | Circuits, colors, equipment flags, temp ranges |
+| Equipment Config | Pump details, valve config, heater config, remotes |
+| Pump Status | Running state, RPM, watts, GPM |
+| Schedules | Recurring and run-once schedules |
+| Chemistry | pH, ORP, salt, saturation (if equipped) |
+| Chlorinator | Pool/spa output %, salt level (if equipped) |
+| System Time | Current date/time, DST status |
+| Weather | Forecast data |
+| History | Temperature data over time (43+ data points) |
+
+### Available Controls (Write)
+| Action | Parameters |
+|--------|------------|
+| Toggle Circuit | `circuitId`, `state` (on/off) |
+| Set Pool Temp | `temp` (40-104°F) |
+| Set Spa Temp | `temp` (40-104°F) |
+| Set Heat Mode | `bodyId`, `mode` (0=Off, 1=Solar, 2=Solar Preferred, 3=Heater) |
+| Set Cool Setpoint | `bodyId`, `temp` |
+| Light Command | `command` (color/mode) |
+| Set Circuit Runtime | `circuitId`, `runtime` (egg timer) |
+| Create Schedule | `circuitId`, `startTime`, `stopTime`, `dayMask`, etc. |
+| Update Schedule | `scheduleId`, schedule params |
+| Delete Schedule | `scheduleId` |
+| Set Pump Speed | `pumpId`, `circuitId`, `speed`, `isRPM` |
+| Set Chlorinator | `poolOutput`, `spaOutput` (if equipped) |
+| Set System Time | `date`, `adjustForDST` |
+| Cancel Delay | Cancel pump/valve delays |
+
+### Heat Modes
+| Mode | Value | Description |
+|------|-------|-------------|
+| Off | 0 | No heating |
+| Solar | 1 | Solar only |
+| Solar Preferred | 2 | Solar first, then heater |
+| Heater | 3 | Gas/electric heater |
+| Don't Change | 4 | Keep current mode |
 
 ---
 
@@ -280,6 +359,7 @@ The following Node.js scripts serve as protocol reference:
 | `pool-status.js` | Fetch and display pool state |
 | `pool-control.js` | CLI for controlling circuits/temp |
 | `get-config.js` | Fetch controller configuration |
+| `api-discovery.js` | Full API capability discovery |
 
 These use `node-screenlogic` and document exactly how the protocol works for future Swift port.
 
