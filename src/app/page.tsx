@@ -1,6 +1,56 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useLayoutEffect, useState, useCallback, useRef } from 'react';
+
+// Cache for home page status data
+const STATUS_CACHE_KEY = 'plunge_status_cache';
+const SCHEDULES_CACHE_KEY = 'plunge_schedules_cache';
+
+interface CachedStatus {
+  data: PoolStatus;
+  timestamp: number;
+}
+
+interface CachedSchedules {
+  data: ScheduleEvent[];
+  timestamp: number;
+}
+
+function loadStatusCache(): CachedStatus | null {
+  if (typeof window === 'undefined') return null;
+  const stored = localStorage.getItem(STATUS_CACHE_KEY);
+  if (stored) {
+    try {
+      return JSON.parse(stored);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function saveStatusCache(data: PoolStatus): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(STATUS_CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() }));
+}
+
+function loadSchedulesCache(): CachedSchedules | null {
+  if (typeof window === 'undefined') return null;
+  const stored = localStorage.getItem(SCHEDULES_CACHE_KEY);
+  if (stored) {
+    try {
+      return JSON.parse(stored);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function saveSchedulesCache(data: ScheduleEvent[]): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(SCHEDULES_CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() }));
+}
 
 interface PoolBody {
   bodyType: number;
@@ -163,10 +213,10 @@ function TempRing({ current, setPoint, isActive }: { current: number; setPoint: 
   const offset = circumference * (1 - progress * 0.7);
 
   return (
-    <div className="relative w-[165px] h-[165px]">
+    <div className="relative w-[140px] h-[140px]">
       {isActive && (
         <div 
-          className="absolute top-1/2 left-1/2 w-[120px] h-[120px] -translate-x-1/2 -translate-y-1/2 rounded-full animate-pulse-glow"
+          className="absolute top-1/2 left-1/2 w-[102px] h-[102px] -translate-x-1/2 -translate-y-1/2 rounded-full animate-pulse-glow"
           style={{ background: 'radial-gradient(circle, rgba(0, 210, 211, 0.15) 0%, transparent 70%)' }}
         />
       )}
@@ -186,10 +236,10 @@ function TempRing({ current, setPoint, isActive }: { current: number; setPoint: 
         />
       </svg>
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
-        <div className="text-[48px] font-light tracking-tight leading-none">
-          {current}<sup className="text-[20px] text-white/55 ml-0.5">°</sup>
+        <div className="text-[42px] font-light tracking-tight leading-none">
+          {current}<sup className="text-[17px] text-white/55 ml-0.5">°</sup>
         </div>
-        <div className="text-[14px] text-white/55 mt-1.5">
+        <div className="text-[13px] text-white/55 mt-1">
           Set to <strong className="text-white/90 font-medium">{setPoint}°</strong>
         </div>
       </div>
@@ -207,6 +257,7 @@ function formatScheduleTime(minutes: number): string {
 }
 
 export default function Home() {
+  // Start with null - will load from cache in useEffect (avoids hydration mismatch)
   const [status, setStatus] = useState<PoolStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -218,6 +269,9 @@ export default function Home() {
   
   // Schedule data
   const [schedules, setSchedules] = useState<ScheduleEvent[]>([]);
+  
+  // Track if we've loaded cache to avoid showing loading flash
+  const cacheCheckedRef = useRef(false);
   
   // Sheet states
   const [activeSheet, setActiveSheet] = useState<'pool' | 'spa' | 'lights' | null>(null);
@@ -240,11 +294,27 @@ export default function Home() {
   useEffect(() => { credentialsRef.current = credentials; }, [credentials]);
   useEffect(() => { statusRef.current = status; }, [status]);
   
-  // Load credentials from localStorage on mount
-  useEffect(() => {
+  // Load credentials and cache on mount - useLayoutEffect runs before paint
+  useLayoutEffect(() => {
+    if (cacheCheckedRef.current) return;
+    cacheCheckedRef.current = true;
+    
     const stored = loadCredentials();
     setCredentials(stored);
     setCredentialsLoaded(true);
+    
+    // Load cached status - show immediately without loading spinner
+    const cachedStatus = loadStatusCache();
+    if (cachedStatus?.data) {
+      setStatus(cachedStatus.data);
+      setLoading(false);
+    }
+    
+    // Load cached schedules
+    const cachedSchedules = loadSchedulesCache();
+    if (cachedSchedules?.data) {
+      setSchedules(cachedSchedules.data);
+    }
   }, []);
 
   const fetchStatus = useCallback(async (validateOptimistic = false) => {
@@ -260,6 +330,9 @@ export default function Home() {
         setStatus(data);
         setError(null);
         setLoading(false);
+        
+        // Cache the status for instant load on navigation
+        saveStatusCache(data);
         
         // If validating, check if server state matches our optimistic update
         if (validateOptimistic && optimisticHeatModeRef.current) {
@@ -307,15 +380,20 @@ export default function Home() {
       return;
     }
     
-    // Show "Connecting locally..." for 1.5s, then "Connecting remotely..."
-    const phaseTimeout = setTimeout(() => {
+    // If we already have status from cache, don't show connecting animation
+    // Just refresh in background
+    const hasCache = statusRef.current !== null;
+    
+    // Show "Connecting locally..." for 1.5s, then "Connecting remotely..." (only if no cache)
+    const phaseTimeout = hasCache ? null : setTimeout(() => {
       setConnectingPhase('remote');
     }, 1500);
     
-    // Try to connect once
+    // Fetch fresh data (silently if we have cache)
     const connect = async () => {
       const success = await fetchStatus();
-      if (!success) {
+      if (!success && !hasCache) {
+        // Only show error if we don't have cached data to show
         setError('Could not connect to pool');
         setLoading(false);
       }
@@ -336,7 +414,9 @@ export default function Home() {
         const schedulesRes = await fetch('/api/schedules', { headers: getAuthHeaders(creds) });
         if (schedulesRes.ok) {
           const data = await schedulesRes.json();
-          setSchedules(data.recurring || []);
+          const recurring = data.recurring || [];
+          setSchedules(recurring);
+          saveSchedulesCache(recurring);
         }
       } catch {
         // Silently fail - these are optional enhancements
@@ -349,7 +429,7 @@ export default function Home() {
     return () => {
       clearInterval(interval);
       clearInterval(extrasInterval);
-      clearTimeout(phaseTimeout);
+      if (phaseTimeout) clearTimeout(phaseTimeout);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [credentialsLoaded, credentials]);
@@ -796,9 +876,9 @@ export default function Home() {
             {pool && (
               <div
                 onClick={() => openTempSheet('pool')}
-                className={`liquid-glass p-4 mb-3 cursor-pointer animate-slide-up ${getCircuitState(6) ? 'tint-cyan' : ''}`}
+                className={`liquid-glass p-3.5 mb-2.5 cursor-pointer animate-slide-up ${getCircuitState(6) ? 'tint-cyan' : ''}`}
               >
-                <div className="flex justify-between items-center mb-2.5 relative z-10">
+                <div className="flex justify-between items-center mb-2 relative z-10">
                   <div className="flex items-center gap-3">
                     <span className="text-[17px] font-semibold">{pool.name || 'Pool'}</span>
                     {/* Heat mode indicator (only show when pump is on) */}
@@ -811,7 +891,7 @@ export default function Home() {
                     onToggle={() => toggleCircuit(6, getCircuitState(6))} 
                   />
                 </div>
-                <div className="flex flex-col items-center py-1.5 relative z-10">
+                <div className="flex flex-col items-center py-1 relative z-10">
                   <TempRing current={pool.currentTemp} setPoint={pool.setPoint} isActive={getCircuitState(6)} />
                 </div>
                 {/* Schedule indicator */}
@@ -819,7 +899,7 @@ export default function Home() {
                   const schedule = getCircuitSchedule(6);
                   if (schedule) {
                     return (
-                      <div className="flex items-center gap-1.5 mt-2 text-[11px] text-white/40 relative z-10">
+                      <div className="flex items-center gap-1.5 mt-1.5 text-[11px] text-white/40 relative z-10">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5">
                           <circle cx="12" cy="12" r="10"/>
                           <polyline points="12 6 12 12 16 14"/>
@@ -837,9 +917,9 @@ export default function Home() {
             {spa && (
               <div
                 onClick={() => openTempSheet('spa')}
-                className={`liquid-glass p-4 mb-3 cursor-pointer animate-slide-up ${getCircuitState(1) ? 'tint-cyan' : ''}`}
+                className={`liquid-glass p-3.5 mb-2.5 cursor-pointer animate-slide-up ${getCircuitState(1) ? 'tint-cyan' : ''}`}
               >
-                <div className="flex justify-between items-center mb-2.5 relative z-10">
+                <div className="flex justify-between items-center mb-2 relative z-10">
                   <div className="flex items-center gap-3">
                     <span className="text-[17px] font-semibold">{spa.name || 'Spa'}</span>
                     {/* Heat mode indicator (only show when spa is on) */}
@@ -852,7 +932,7 @@ export default function Home() {
                     onToggle={() => toggleCircuit(1, getCircuitState(1))} 
                   />
                 </div>
-                <div className="flex flex-col items-center py-1.5 relative z-10">
+                <div className="flex flex-col items-center py-1 relative z-10">
                   <TempRing current={spa.currentTemp} setPoint={spa.setPoint} isActive={getCircuitState(1)} />
                 </div>
                 {/* Schedule indicator */}
@@ -860,7 +940,7 @@ export default function Home() {
                   const schedule = getCircuitSchedule(1);
                   if (schedule) {
                     return (
-                      <div className="flex items-center gap-1.5 mt-2 text-[11px] text-white/40 relative z-10">
+                      <div className="flex items-center gap-1.5 mt-1.5 text-[11px] text-white/40 relative z-10">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5">
                           <circle cx="12" cy="12" r="10"/>
                           <polyline points="12 6 12 12 16 14"/>

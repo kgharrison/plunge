@@ -10,39 +10,63 @@ const ScreenLogic = require('node-screenlogic');
 let connectionCounter = 0;
 const activeConnections = new Map<number, { type: string; startTime: Date }>();
 
-// Connection queue to prevent overwhelming the controller
-// The pool controller can only handle ~2 concurrent connections reliably
-const MAX_CONCURRENT_CONNECTIONS = 2;
-const connectionQueue: Array<() => void> = [];
+// Connection semaphore - only one connection at a time
+// The pool controller can only handle 1 connection reliably
+let connectionLock: Promise<void> = Promise.resolve();
 let currentConnections = 0;
 
-function acquireConnectionSlot(): Promise<void> {
-  return new Promise((resolve) => {
-    if (currentConnections < MAX_CONCURRENT_CONNECTIONS) {
-      currentConnections++;
-      resolve();
-    } else {
-      connectionQueue.push(() => {
+// Queue timeout - don't wait forever for a slot
+const QUEUE_TIMEOUT_MS = 10000; // 10 seconds max wait
+
+function acquireConnectionSlot(): Promise<() => void> {
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      reject(new Error('Connection queue timeout - too many pending requests'));
+    }, QUEUE_TIMEOUT_MS);
+    
+    // Create a release function for this specific connection
+    let releaseThis: () => void;
+    const releasePromise = new Promise<void>((r) => { releaseThis = r; });
+    
+    // Chain onto the lock
+    const previousLock = connectionLock;
+    connectionLock = previousLock
+      .then(() => {
+        clearTimeout(timeoutId);
         currentConnections++;
-        resolve();
+        // Resolve with the release function
+        resolve(releaseThis!);
+        // Wait for this connection to be released before allowing next
+        return releasePromise;
+      })
+      .catch(() => {
+        // Previous connection errored, still allow this one
+        clearTimeout(timeoutId);
+        currentConnections++;
+        resolve(releaseThis!);
+        return releasePromise;
       });
-    }
   });
 }
 
-function releaseConnectionSlot(): void {
-  currentConnections--;
-  if (connectionQueue.length > 0 && currentConnections < MAX_CONCURRENT_CONNECTIONS) {
-    const next = connectionQueue.shift();
-    if (next) next();
-  }
+function releaseConnectionSlot(releaseFn: () => void): void {
+  currentConnections = Math.max(0, currentConnections - 1);
+  releaseFn();
+}
+
+// Reset connection state - call this if things get stuck
+function resetConnectionState(): void {
+  currentConnections = 0;
+  connectionLock = Promise.resolve();
+  activeConnections.clear();
+  log('Connection state reset');
 }
 
 function log(message: string, data?: Record<string, unknown>) {
   const timestamp = new Date().toISOString();
   const activeCount = activeConnections.size;
-  const queueSize = connectionQueue.length;
-  console.log(`[ScreenLogic ${timestamp}] [Active: ${activeCount}] [Queue: ${queueSize}] ${message}`, data ? JSON.stringify(data) : '');
+  const pending = currentConnections;
+  console.log(`[ScreenLogic ${timestamp}] [Active: ${activeCount}] [Pending: ${pending}] ${message}`, data ? JSON.stringify(data) : '');
 }
 
 export interface PoolBody {
@@ -236,103 +260,139 @@ export function clearConnectionCache(): void {
 
 // Timeout for history requests (30 days can take 30+ seconds)
 const HISTORY_TIMEOUT = 60000; // 60 seconds
+const CONNECTION_TIMEOUT = 15000; // 15 seconds for normal connections
 
 /**
  * Create a connected client - handles both local and remote connections
  */
-async function createClient(credentials: Credentials, skipLocalDiscovery = false, extendedTimeout = false): Promise<{ client: any; connectionType: 'local' | 'remote'; connectionId: number }> {
+async function createClient(credentials: Credentials, skipLocalDiscovery = false, extendedTimeout = false): Promise<{ client: any; connectionType: 'local' | 'remote'; connectionId: number; release: () => void }> {
   // Wait for a connection slot to prevent overwhelming the controller
-  await acquireConnectionSlot();
+  let release: () => void;
+  try {
+    release = await acquireConnectionSlot();
+  } catch (err) {
+    // Queue timeout - reset state and try again
+    log('Connection queue timeout, resetting state');
+    resetConnectionState();
+    throw err;
+  }
   
   const connectionId = ++connectionCounter;
   log(`Creating connection #${connectionId}`, { skipLocalDiscovery, extendedTimeout });
   
-  const connInfo = await getConnectionInfo(credentials, skipLocalDiscovery);
-  const client = new ScreenLogic.UnitConnection();
+  // Set up a timeout to prevent hung connections from blocking the queue
+  const timeout = extendedTimeout ? HISTORY_TIMEOUT : CONNECTION_TIMEOUT;
   
-  // Extend timeout for long-running operations like history fetches
-  if (extendedTimeout) {
-    client.netTimeout = HISTORY_TIMEOUT;
-  }
+  // Wrap the entire connection process with a timeout
+  const connectWithTimeout = async (): Promise<{ client: any; connectionType: 'local' | 'remote'; connectionId: number; release: () => void }> => {
+    const connInfo = await getConnectionInfo(credentials, skipLocalDiscovery);
+    const client = new ScreenLogic.UnitConnection();
+    
+    // Extend timeout for long-running operations like history fetches
+    if (extendedTimeout) {
+      client.netTimeout = HISTORY_TIMEOUT;
+    }
 
-  if (connInfo.type === 'local' && connInfo.address && connInfo.port) {
-    // Direct local connection
-    try {
+    if (connInfo.type === 'local' && connInfo.address && connInfo.port) {
+      // Direct local connection
       log(`Connection #${connectionId}: Attempting local connection`, { address: connInfo.address, port: connInfo.port });
       client.init(credentials.systemName, connInfo.address, connInfo.port, credentials.password);
       await client.connectAsync();
       activeConnections.set(connectionId, { type: 'local', startTime: new Date() });
       log(`Connection #${connectionId}: Local connection established`);
-      return { client, connectionType: 'local', connectionId };
-    } catch (err) {
-      // Local connection failed, clear cache and try remote
-      log(`Connection #${connectionId}: Local connection failed`, { error: (err as Error).message });
-      clearConnectionCache();
-      // Release slot before retrying (createClient will acquire a new one)
-      releaseConnectionSlot();
-      return createClient(credentials, true, extendedTimeout); // Skip local discovery on retry
-    }
-  } else {
-    // Remote connection via Pentair cloud
-    log(`Connection #${connectionId}: Attempting remote connection via Pentair cloud`);
-    const gateway = new ScreenLogic.RemoteLogin(credentials.systemName);
-    const unit = await gateway.connectAsync();
+      return { client, connectionType: 'local', connectionId, release };
+    } else {
+      // Remote connection via Pentair cloud
+      log(`Connection #${connectionId}: Attempting remote connection via Pentair cloud`);
+      const gateway = new ScreenLogic.RemoteLogin(credentials.systemName);
+      const unit = await gateway.connectAsync();
 
-    if (!unit || !unit.gatewayFound) {
-      log(`Connection #${connectionId}: Gateway not found`);
-      releaseConnectionSlot();
-      throw new Error('Could not find gateway');
-    }
-
-    log(`Connection #${connectionId}: Gateway found, closing gateway connection`);
-    await gateway.closeAsync().catch(() => {});
-
-    // Check if gateway returned valid connection info
-    // If IP is empty, we're likely on the local network - try local discovery
-    if (!unit.ipAddr || unit.port === 0) {
-      log(`Connection #${connectionId}: Gateway returned empty IP - trying local discovery`);
-      clearConnectionCache();
-      
-      // Try local discovery
-      const localUnits = await discoverLocalUnits(5000);
-      if (localUnits.length > 0) {
-        const localUnit = localUnits[0];
-        log(`Connection #${connectionId}: Found local unit, connecting`, { address: localUnit.address, port: localUnit.port });
-        
-        // Cache the local connection
-        cachedConnectionInfo = {
-          type: 'local',
-          systemName: credentials.systemName,
-          address: localUnit.address,
-          port: localUnit.port,
-          gatewayName: localUnit.gatewayName
-        };
-        cacheExpiry = Date.now() + CACHE_TTL;
-        
-        client.init(credentials.systemName, localUnit.address, localUnit.port, credentials.password);
-        await client.connectAsync();
-        activeConnections.set(connectionId, { type: 'local', startTime: new Date() });
-        log(`Connection #${connectionId}: Local connection established (after remote redirect)`);
-        return { client, connectionType: 'local', connectionId };
-      } else {
-        releaseConnectionSlot();
-        throw new Error('Gateway returned empty IP and no local units found');
+      if (!unit || !unit.gatewayFound) {
+        log(`Connection #${connectionId}: Gateway not found`);
+        throw new Error('Could not find gateway');
       }
-    }
 
-    log(`Connection #${connectionId}: Connecting to unit`, { ipAddr: unit.ipAddr, port: unit.port });
-    client.init(credentials.systemName, unit.ipAddr, unit.port, credentials.password);
-    await client.connectAsync();
-    activeConnections.set(connectionId, { type: 'remote', startTime: new Date() });
-    log(`Connection #${connectionId}: Remote connection established`);
-    return { client, connectionType: 'remote', connectionId };
+      log(`Connection #${connectionId}: Gateway found, closing gateway connection`);
+      await gateway.closeAsync().catch(() => {});
+
+      // Check if gateway returned valid connection info
+      // If IP is empty, we're likely on the local network - try local discovery
+      if (!unit.ipAddr || unit.port === 0) {
+        log(`Connection #${connectionId}: Gateway returned empty IP - trying local discovery`);
+        clearConnectionCache();
+        
+        // Try local discovery
+        const localUnits = await discoverLocalUnits(5000);
+        if (localUnits.length > 0) {
+          const localUnit = localUnits[0];
+          log(`Connection #${connectionId}: Found local unit, connecting`, { address: localUnit.address, port: localUnit.port });
+          
+          // Cache the local connection
+          cachedConnectionInfo = {
+            type: 'local',
+            systemName: credentials.systemName,
+            address: localUnit.address,
+            port: localUnit.port,
+            gatewayName: localUnit.gatewayName
+          };
+          cacheExpiry = Date.now() + CACHE_TTL;
+          
+          client.init(credentials.systemName, localUnit.address, localUnit.port, credentials.password);
+          await client.connectAsync();
+          activeConnections.set(connectionId, { type: 'local', startTime: new Date() });
+          log(`Connection #${connectionId}: Local connection established (after remote redirect)`);
+          return { client, connectionType: 'local', connectionId, release };
+        } else {
+          throw new Error('Gateway returned empty IP and no local units found');
+        }
+      }
+
+      log(`Connection #${connectionId}: Connecting to unit`, { ipAddr: unit.ipAddr, port: unit.port });
+      client.init(credentials.systemName, unit.ipAddr, unit.port, credentials.password);
+      await client.connectAsync();
+      activeConnections.set(connectionId, { type: 'remote', startTime: new Date() });
+      log(`Connection #${connectionId}: Remote connection established`);
+      return { client, connectionType: 'remote', connectionId, release };
+    }
+  };
+  
+  // Race the connection against a timeout
+  let timeoutId: NodeJS.Timeout | null = null;
+  try {
+    const result = await Promise.race([
+      connectWithTimeout(),
+      new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          log(`Connection #${connectionId}: Timeout after ${timeout}ms`);
+          reject(new Error(`Connection timeout after ${timeout}ms`));
+        }, timeout);
+      })
+    ]);
+    if (timeoutId) clearTimeout(timeoutId);
+    return result;
+  } catch (err) {
+    if (timeoutId) clearTimeout(timeoutId);
+    
+    // If local connection failed, try remote
+    if ((err as Error).message?.includes('Local connection') || 
+        (err as Error).message?.includes('ECONNREFUSED') ||
+        (err as Error).message?.includes('ETIMEDOUT')) {
+      log(`Connection #${connectionId}: Local connection failed, trying remote`, { error: (err as Error).message });
+      clearConnectionCache();
+      releaseConnectionSlot(release);
+      return createClient(credentials, true, extendedTimeout);
+    }
+    
+    // Release slot on any error
+    releaseConnectionSlot(release);
+    throw err;
   }
 }
 
 /**
  * Close a client connection with logging
  */
-async function closeClient(client: any, connectionId: number): Promise<void> {
+async function closeClient(client: any, connectionId: number, release: () => void): Promise<void> {
   const connInfo = activeConnections.get(connectionId);
   const duration = connInfo ? Date.now() - connInfo.startTime.getTime() : 0;
   log(`Connection #${connectionId}: Closing`, { durationMs: duration });
@@ -346,7 +406,7 @@ async function closeClient(client: any, connectionId: number): Promise<void> {
     log(`Connection #${connectionId}: Error during close`, { error: (err as Error).message });
   } finally {
     // Release the connection slot for the next queued request
-    releaseConnectionSlot();
+    releaseConnectionSlot(release);
   }
 }
 
@@ -356,7 +416,7 @@ async function closeClient(client: any, connectionId: number): Promise<void> {
 export async function getPoolStatus(requestCredentials?: Credentials): Promise<PoolStatus> {
   log('getPoolStatus: Starting');
   const credentials = getCredentials(requestCredentials);
-  const { client, connectionType, connectionId } = await createClient(credentials);
+  const { client, connectionType, connectionId, release } = await createClient(credentials);
 
   try {
     log(`getPoolStatus: Fetching equipment state (connection #${connectionId})`);
@@ -406,7 +466,7 @@ export async function getPoolStatus(requestCredentials?: Credentials): Promise<P
       cleanerDelay: (state.cleanerDelay || 0) > 0,
     };
   } finally {
-    await closeClient(client, connectionId);
+    await closeClient(client, connectionId, release);
   }
 }
 
@@ -416,14 +476,14 @@ export async function getPoolStatus(requestCredentials?: Credentials): Promise<P
 export async function setCircuitState(circuitId: number, state: boolean, requestCredentials?: Credentials): Promise<void> {
   log('setCircuitState: Starting', { circuitId, state });
   const credentials = getCredentials(requestCredentials);
-  const { client, connectionId } = await createClient(credentials);
+  const { client, connectionId, release } = await createClient(credentials);
 
   try {
     log(`setCircuitState: Setting circuit state (connection #${connectionId})`);
     await client.circuits.setCircuitStateAsync(circuitId, state ? 1 : 0);
     log(`setCircuitState: Circuit state set successfully`);
   } finally {
-    await closeClient(client, connectionId);
+    await closeClient(client, connectionId, release);
   }
 }
 
@@ -433,14 +493,14 @@ export async function setCircuitState(circuitId: number, state: boolean, request
 export async function cancelDelay(requestCredentials?: Credentials): Promise<void> {
   log('cancelDelay: Starting');
   const credentials = getCredentials(requestCredentials);
-  const { client, connectionId } = await createClient(credentials);
+  const { client, connectionId, release } = await createClient(credentials);
 
   try {
     log(`cancelDelay: Cancelling delays (connection #${connectionId})`);
     await client.equipment.cancelDelayAsync();
     log(`cancelDelay: Delays cancelled successfully`);
   } finally {
-    await closeClient(client, connectionId);
+    await closeClient(client, connectionId, release);
   }
 }
 
@@ -450,14 +510,14 @@ export async function cancelDelay(requestCredentials?: Credentials): Promise<voi
 export async function setCircuitRuntime(circuitId: number, minutes: number, requestCredentials?: Credentials): Promise<void> {
   log('setCircuitRuntime: Starting', { circuitId, minutes });
   const credentials = getCredentials(requestCredentials);
-  const { client, connectionId } = await createClient(credentials);
+  const { client, connectionId, release } = await createClient(credentials);
 
   try {
     log(`setCircuitRuntime: Setting circuit runtime (connection #${connectionId})`);
     await client.circuits.setCircuitRuntimebyIdAsync(circuitId, minutes);
     log(`setCircuitRuntime: Circuit runtime set successfully`);
   } finally {
-    await closeClient(client, connectionId);
+    await closeClient(client, connectionId, release);
   }
 }
 
@@ -467,14 +527,14 @@ export async function setCircuitRuntime(circuitId: number, minutes: number, requ
 export async function setBodyTemperature(bodyIndex: number, temp: number, requestCredentials?: Credentials): Promise<void> {
   log('setBodyTemperature: Starting', { bodyIndex, temp });
   const credentials = getCredentials(requestCredentials);
-  const { client, connectionId } = await createClient(credentials);
+  const { client, connectionId, release } = await createClient(credentials);
 
   try {
     log(`setBodyTemperature: Setting temperature (connection #${connectionId})`);
     await client.bodies.setSetPointAsync(bodyIndex, temp);
     log(`setBodyTemperature: Temperature set successfully`);
   } finally {
-    await closeClient(client, connectionId);
+    await closeClient(client, connectionId, release);
   }
 }
 
@@ -484,14 +544,14 @@ export async function setBodyTemperature(bodyIndex: number, temp: number, reques
 export async function setHeatMode(bodyIndex: number, mode: number, requestCredentials?: Credentials): Promise<void> {
   log('setHeatMode: Starting', { bodyIndex, mode });
   const credentials = getCredentials(requestCredentials);
-  const { client, connectionId } = await createClient(credentials);
+  const { client, connectionId, release } = await createClient(credentials);
 
   try {
     log(`setHeatMode: Setting heat mode (connection #${connectionId})`);
     await client.bodies.setHeatModeAsync(bodyIndex, mode);
     log(`setHeatMode: Heat mode set successfully`);
   } finally {
-    await closeClient(client, connectionId);
+    await closeClient(client, connectionId, release);
   }
 }
 
@@ -501,14 +561,14 @@ export async function setHeatMode(bodyIndex: number, mode: number, requestCreden
 export async function sendLightCommand(command: number, requestCredentials?: Credentials): Promise<void> {
   log('sendLightCommand: Starting', { command });
   const credentials = getCredentials(requestCredentials);
-  const { client, connectionId } = await createClient(credentials);
+  const { client, connectionId, release } = await createClient(credentials);
 
   try {
     log(`sendLightCommand: Sending command (connection #${connectionId})`);
     await client.lights.sendLightCommandAsync(0, command);
     log(`sendLightCommand: Command sent successfully`);
   } finally {
-    await closeClient(client, connectionId);
+    await closeClient(client, connectionId, release);
   }
 }
 
@@ -643,7 +703,7 @@ export interface FullConfig {
 export async function getSystemTime(requestCredentials?: Credentials): Promise<{ date: Date; adjustForDST: boolean }> {
   log('getSystemTime: Starting');
   const credentials = getCredentials(requestCredentials);
-  const { client, connectionId } = await createClient(credentials);
+  const { client, connectionId, release } = await createClient(credentials);
 
   try {
     log(`getSystemTime: Fetching system time (connection #${connectionId})`);
@@ -660,7 +720,7 @@ export async function getSystemTime(requestCredentials?: Credentials): Promise<{
     log(`getSystemTime: Error fetching system time`, { error: (err as Error).message });
     throw err;
   } finally {
-    await closeClient(client, connectionId);
+    await closeClient(client, connectionId, release);
   }
 }
 
@@ -672,7 +732,7 @@ export async function getHistoryData(fromTime?: Date, toTime?: Date, requestCred
   log('getHistoryData: Starting', { fromTime: fromTime?.toISOString(), toTime: toTime?.toISOString() });
   const credentials = getCredentials(requestCredentials);
   // Use extended timeout for history requests
-  const { client, connectionId } = await createClient(credentials, false, true);
+  const { client, connectionId, release } = await createClient(credentials, false, true);
 
   let history: HistoryData;
   try {
@@ -683,7 +743,7 @@ export async function getHistoryData(fromTime?: Date, toTime?: Date, requestCred
     log(`getHistoryData: Error fetching history`, { error: (err as Error).message });
     throw err;
   } finally {
-    await closeClient(client, connectionId);
+    await closeClient(client, connectionId, release);
   }
   return history;
 }
@@ -698,7 +758,7 @@ export async function getHistoryData(fromTime?: Date, toTime?: Date, requestCred
 export async function getSchedules(requestCredentials?: Credentials): Promise<ScheduleData> {
   log('getSchedules: Starting');
   const credentials = getCredentials(requestCredentials);
-  const { client, connectionId } = await createClient(credentials);
+  const { client, connectionId, release } = await createClient(credentials);
 
   try {
     log(`getSchedules: Fetching schedules (connection #${connectionId})`);
@@ -744,7 +804,7 @@ export async function getSchedules(requestCredentials?: Credentials): Promise<Sc
     log(`getSchedules: Found ${recurring.length} recurring, ${runOnce.length} run-once`);
     return { recurring, runOnce };
   } finally {
-    await closeClient(client, connectionId);
+    await closeClient(client, connectionId, release);
   }
 }
 
@@ -764,7 +824,7 @@ export async function createSchedule(
 ): Promise<number> {
   log('createSchedule: Starting', { scheduleType, circuitId, startTime, stopTime, dayMask });
   const credentials = getCredentials(requestCredentials);
-  const { client, connectionId } = await createClient(credentials);
+  const { client, connectionId, release } = await createClient(credentials);
 
   try {
     log(`createSchedule: Creating schedule (connection #${connectionId})`);
@@ -773,7 +833,7 @@ export async function createSchedule(
     log(`createSchedule: Schedule created with ID ${result.scheduleId}`);
     return result.scheduleId;
   } finally {
-    await closeClient(client, connectionId);
+    await closeClient(client, connectionId, release);
   }
 }
 
@@ -793,14 +853,14 @@ export async function updateSchedule(
 ): Promise<void> {
   log('updateSchedule: Starting', { scheduleId, circuitId, startTime, stopTime, dayMask });
   const credentials = getCredentials(requestCredentials);
-  const { client, connectionId } = await createClient(credentials);
+  const { client, connectionId, release } = await createClient(credentials);
 
   try {
     log(`updateSchedule: Updating schedule (connection #${connectionId})`);
     await client.schedule.setScheduleEventByIdAsync(scheduleId, circuitId, startTime, stopTime, dayMask, flags, heatCmd, heatSetPoint);
     log(`updateSchedule: Schedule updated successfully`);
   } finally {
-    await closeClient(client, connectionId);
+    await closeClient(client, connectionId, release);
   }
 }
 
@@ -810,14 +870,14 @@ export async function updateSchedule(
 export async function deleteSchedule(scheduleId: number, requestCredentials?: Credentials): Promise<void> {
   log('deleteSchedule: Starting', { scheduleId });
   const credentials = getCredentials(requestCredentials);
-  const { client, connectionId } = await createClient(credentials);
+  const { client, connectionId, release } = await createClient(credentials);
 
   try {
     log(`deleteSchedule: Deleting schedule (connection #${connectionId})`);
     await client.schedule.deleteScheduleEventByIdAsync(scheduleId);
     log(`deleteSchedule: Schedule deleted successfully`);
   } finally {
-    await closeClient(client, connectionId);
+    await closeClient(client, connectionId, release);
   }
 }
 
@@ -831,7 +891,7 @@ export async function deleteSchedule(scheduleId: number, requestCredentials?: Cr
 export async function getControllerConfig(requestCredentials?: Credentials): Promise<ControllerConfig> {
   log('getControllerConfig: Starting');
   const credentials = getCredentials(requestCredentials);
-  const { client, connectionId } = await createClient(credentials);
+  const { client, connectionId, release } = await createClient(credentials);
 
   try {
     log(`getControllerConfig: Fetching controller config (connection #${connectionId})`);
@@ -881,7 +941,7 @@ export async function getControllerConfig(requestCredentials?: Credentials): Pro
       })),
     };
   } finally {
-    await closeClient(client, connectionId);
+    await closeClient(client, connectionId, release);
   }
 }
 
@@ -891,7 +951,7 @@ export async function getControllerConfig(requestCredentials?: Credentials): Pro
 export async function getFullConfig(requestCredentials?: Credentials): Promise<FullConfig> {
   log('getFullConfig: Starting');
   const credentials = getCredentials(requestCredentials);
-  const { client, connectionId } = await createClient(credentials);
+  const { client, connectionId, release } = await createClient(credentials);
 
   try {
     log(`getFullConfig: Fetching controller config (connection #${connectionId})`);
@@ -1002,7 +1062,7 @@ export async function getFullConfig(requestCredentials?: Credentials): Promise<F
     log(`getFullConfig: Config fetched successfully`);
     return { controller, equipment };
   } finally {
-    await closeClient(client, connectionId);
+    await closeClient(client, connectionId, release);
   }
 }
 
@@ -1012,7 +1072,7 @@ export async function getFullConfig(requestCredentials?: Credentials): Promise<F
 export async function getPumpStatus(pumpId: number, requestCredentials?: Credentials): Promise<PumpConfig | null> {
   log('getPumpStatus: Starting', { pumpId });
   const credentials = getCredentials(requestCredentials);
-  const { client, connectionId } = await createClient(credentials);
+  const { client, connectionId, release } = await createClient(credentials);
 
   try {
     log(`getPumpStatus: Fetching pump status (connection #${connectionId})`);
@@ -1038,7 +1098,7 @@ export async function getPumpStatus(pumpId: number, requestCredentials?: Credent
       primingTime: pump.primingTime || 0,
     };
   } finally {
-    await closeClient(client, connectionId);
+    await closeClient(client, connectionId, release);
   }
 }
 
@@ -1054,14 +1114,14 @@ export async function setPumpCircuitSpeed(
 ): Promise<void> {
   log('setPumpCircuitSpeed: Starting', { pumpId, circuitId, speed, isRPM });
   const credentials = getCredentials(requestCredentials);
-  const { client, connectionId } = await createClient(credentials);
+  const { client, connectionId, release } = await createClient(credentials);
 
   try {
     log(`setPumpCircuitSpeed: Setting pump speed (connection #${connectionId})`);
     await client.pump.setPumpSpeedAsync(pumpId, circuitId, speed, isRPM);
     log(`setPumpCircuitSpeed: Pump speed set successfully`);
   } finally {
-    await closeClient(client, connectionId);
+    await closeClient(client, connectionId, release);
   }
 }
 
@@ -1071,14 +1131,14 @@ export async function setPumpCircuitSpeed(
 export async function setSystemTime(date: Date, adjustForDST: boolean, requestCredentials?: Credentials): Promise<void> {
   log('setSystemTime: Starting', { date: date.toISOString(), adjustForDST });
   const credentials = getCredentials(requestCredentials);
-  const { client, connectionId } = await createClient(credentials);
+  const { client, connectionId, release } = await createClient(credentials);
 
   try {
     log(`setSystemTime: Setting system time (connection #${connectionId})`);
     await client.equipment.setSystemTimeAsync(date, adjustForDST);
     log(`setSystemTime: System time set successfully`);
   } finally {
-    await closeClient(client, connectionId);
+    await closeClient(client, connectionId, release);
   }
 }
 
@@ -1088,7 +1148,7 @@ export async function setSystemTime(date: Date, adjustForDST: boolean, requestCr
 export async function getCircuitDefinitions(requestCredentials?: Credentials): Promise<{ id: number; name: string }[]> {
   log('getCircuitDefinitions: Starting');
   const credentials = getCredentials(requestCredentials);
-  const { client, connectionId } = await createClient(credentials);
+  const { client, connectionId, release } = await createClient(credentials);
 
   try {
     log(`getCircuitDefinitions: Fetching circuit definitions (connection #${connectionId})`);
@@ -1099,7 +1159,7 @@ export async function getCircuitDefinitions(requestCredentials?: Credentials): P
       name: c.circuitName || `Circuit ${c.id}`,
     }));
   } finally {
-    await closeClient(client, connectionId);
+    await closeClient(client, connectionId, release);
   }
 }
 
@@ -1109,7 +1169,7 @@ export async function getCircuitDefinitions(requestCredentials?: Credentials): P
 export async function getCustomNames(requestCredentials?: Credentials): Promise<string[]> {
   log('getCustomNames: Starting');
   const credentials = getCredentials(requestCredentials);
-  const { client, connectionId } = await createClient(credentials);
+  const { client, connectionId, release } = await createClient(credentials);
 
   try {
     log(`getCustomNames: Fetching custom names (connection #${connectionId})`);
@@ -1117,7 +1177,7 @@ export async function getCustomNames(requestCredentials?: Credentials): Promise<
     log(`getCustomNames: Found ${result.names?.length || 0} custom names`);
     return result.names || [];
   } finally {
-    await closeClient(client, connectionId);
+    await closeClient(client, connectionId, release);
   }
 }
 
@@ -1130,14 +1190,14 @@ export async function setCustomName(index: number, name: string, requestCredenti
     throw new Error('Custom name must be 11 characters or less');
   }
   const credentials = getCredentials(requestCredentials);
-  const { client, connectionId } = await createClient(credentials);
+  const { client, connectionId, release } = await createClient(credentials);
 
   try {
     log(`setCustomName: Setting custom name (connection #${connectionId})`);
     await client.equipment.setCustomNameAsync(index, name);
     log(`setCustomName: Custom name set successfully`);
   } finally {
-    await closeClient(client, connectionId);
+    await closeClient(client, connectionId, release);
   }
 }
 
@@ -1155,13 +1215,13 @@ export async function setCircuitConfig(
 ): Promise<void> {
   log('setCircuitConfig: Starting', { circuitId, nameIndex, circuitFunction, circuitInterface, freeze, colorPos });
   const credentials = getCredentials(requestCredentials);
-  const { client, connectionId } = await createClient(credentials);
+  const { client, connectionId, release } = await createClient(credentials);
 
   try {
     log(`setCircuitConfig: Setting circuit config (connection #${connectionId})`);
     await client.circuits.setCircuitAsync(circuitId, nameIndex, circuitFunction, circuitInterface, freeze, colorPos);
     log(`setCircuitConfig: Circuit config set successfully`);
   } finally {
-    await closeClient(client, connectionId);
+    await closeClient(client, connectionId, release);
   }
 }

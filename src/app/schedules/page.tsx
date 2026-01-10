@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useLayoutEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { loadSchedulesCache, saveSchedulesCache, isSchedulesCacheStale } from '@/lib/schedules-cache';
 
@@ -104,14 +104,15 @@ function formatRuntime(minutes: number): string {
 }
 
 export default function SchedulesPage() {
-  // State - initialized empty, will load from cache in useEffect
+  // Start with null - will load from cache in useEffect (avoids hydration mismatch)
   const [schedules, setSchedules] = useState<ScheduleData | null>(null);
   const [circuits, setCircuits] = useState<CircuitDefinition[]>([]);
-  const [loading, setLoading] = useState(true);
+  // null = not yet checked cache, true = loading, false = loaded
+  const [loading, setLoading] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [credentials, setCredentials] = useState<Credentials | null>(null);
   const hasFetchedRef = useRef(false);
-  const cacheLoadedRef = useRef(false);
+  const cacheCheckedRef = useRef(false);
   
   // Editor state
   const [editingSchedule, setEditingSchedule] = useState<ScheduleEvent | null>(null);
@@ -167,28 +168,30 @@ export default function SchedulesPage() {
     setSheetTranslateY(0);
   };
 
-  // Load credentials and cache on mount (client-side only)
-  useEffect(() => {
+  // Load credentials and cache on mount - useLayoutEffect runs before paint
+  useLayoutEffect(() => {
+    if (cacheCheckedRef.current) return;
+    cacheCheckedRef.current = true;
+    
     setCredentials(loadCredentials());
     
     // Load from cache for instant display
-    if (!cacheLoadedRef.current) {
-      cacheLoadedRef.current = true;
-      const cache = loadSchedulesCache();
-      if (cache?.schedules) {
-        setSchedules(cache.schedules as ScheduleData);
-        setCircuits((cache.circuits as CircuitDefinition[]) || []);
-        setLoading(false);
-      }
+    const cache = loadSchedulesCache();
+    if (cache?.schedules) {
+      setSchedules(cache.schedules as ScheduleData);
+      setCircuits((cache.circuits as CircuitDefinition[]) || []);
+      setLoading(false);
+    } else {
+      // No cache - show loading state
+      setLoading(true);
     }
   }, []);
 
   const fetchData = useCallback(async (showLoading = true) => {
     if (!credentials) return;
     
-    // Only show loading if we don't have cached data or cache is stale
-    const shouldShowLoading = showLoading && (!schedules || isSchedulesCacheStale());
-    if (shouldShowLoading) {
+    // Only show loading if we don't have any data to display
+    if (showLoading && !schedules) {
       setLoading(true);
     }
     
@@ -373,10 +376,13 @@ export default function SchedulesPage() {
           </button>
         </header>
 
-        {loading ? (
+        {loading === true ? (
           <div className="flex items-center justify-center pt-32">
             <div className="text-white/40">Loading schedules...</div>
           </div>
+        ) : loading === null ? (
+          // Initial state before cache check - show nothing to avoid flash
+          <div className="flex items-center justify-center pt-32" />
         ) : error ? (
           <div className="flex flex-col items-center justify-center pt-32 gap-4">
             <div className="text-white/40">{error}</div>

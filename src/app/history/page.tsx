@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useLayoutEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 
 interface TempPoint {
@@ -27,6 +27,34 @@ interface HistoryData {
 }
 
 const CREDENTIALS_KEY = 'plunge_credentials';
+const HISTORY_CACHE_KEY = 'plunge_history_cache';
+
+// Persistent cache for history data
+interface PersistedHistoryCache {
+  timeRange: TimeRange;
+  dataStart: number;
+  dataEnd: number;
+  data: HistoryData;
+  timestamp: number;
+}
+
+function loadHistoryCache(): PersistedHistoryCache | null {
+  if (typeof window === 'undefined') return null;
+  const stored = localStorage.getItem(HISTORY_CACHE_KEY);
+  if (stored) {
+    try {
+      return JSON.parse(stored);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function saveHistoryCache(cache: PersistedHistoryCache): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(HISTORY_CACHE_KEY, JSON.stringify(cache));
+}
 
 function loadCredentials() {
   if (typeof window === 'undefined') return null;
@@ -805,6 +833,7 @@ function mergeHistoryData(existing: HistoryData, newData: HistoryData): HistoryD
 }
 
 export default function HistoryPage() {
+  // Start with null - will load from cache in useEffect (avoids hydration mismatch)
   const [history, setHistory] = useState<HistoryData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -829,16 +858,40 @@ export default function HistoryPage() {
   
   // Cache ref - persists across renders but doesn't trigger re-renders
   const cacheRef = useRef<CacheInfo | null>(null);
+  
+  // Track if we've loaded cache
+  const cacheCheckedRef = useRef(false);
+  
+  // Load cache on mount - useLayoutEffect runs before paint
+  useLayoutEffect(() => {
+    if (cacheCheckedRef.current) return;
+    cacheCheckedRef.current = true;
 
-  const fetchHistory = useCallback(async (range: TimeRange, end: Date, forceRefresh = false) => {
+    const persistedCache = loadHistoryCache();
+    if (persistedCache && persistedCache.timeRange === '24h') {
+      cacheRef.current = {
+        timeRange: persistedCache.timeRange,
+        dataStart: persistedCache.dataStart,
+        dataEnd: persistedCache.dataEnd,
+        data: persistedCache.data,
+      };
+      setHistory(persistedCache.data);
+      setLoading(false);
+    }
+  }, []);
+
+  const fetchHistory = useCallback(async (range: TimeRange, end: Date, forceRefresh: boolean | 'background' = false) => {
+    const isBackgroundRefresh = forceRefresh === 'background';
+    const shouldForceRefresh = forceRefresh === true;
+    
     const rangeConfig = TIME_RANGES.find(r => r.value === range);
     const hours = rangeConfig?.hours || 24;
     const viewEnd = end.getTime();
     const viewStart = viewEnd - hours * 60 * 60 * 1000;
     
-    // Check cache - if we have data covering the view window, use it
+    // Check cache - if we have data covering the view window, use it (unless forcing refresh)
     let cache = cacheRef.current;
-    if (!forceRefresh && cache && cache.timeRange === range) {
+    if (!shouldForceRefresh && !isBackgroundRefresh && cache && cache.timeRange === range) {
       // Check if cache covers the view window (with some tolerance for edge cases)
       const tolerance = 5 * 60 * 1000; // 5 minutes tolerance
       const cacheCoversView = cache.dataStart <= viewStart + tolerance && cache.dataEnd >= viewEnd - tolerance;
@@ -862,7 +915,7 @@ export default function HistoryPage() {
     let fetchEnd = viewEnd;
     
     // If we have cache, only fetch what we're missing (extend in the needed direction)
-    if (!forceRefresh && cache && cache.timeRange === range) {
+    if (!shouldForceRefresh && cache && cache.timeRange === range) {
       if (viewStart < cache.dataStart && viewEnd <= cache.dataEnd) {
         // Need earlier data - fetch from new start to cache start
         fetchEnd = cache.dataStart;
@@ -873,7 +926,10 @@ export default function HistoryPage() {
     }
     
     isFetchingRef.current = true;
-    setLoading(true);
+    // Don't show loading indicator for background refreshes
+    if (!isBackgroundRefresh) {
+      setLoading(true);
+    }
     const credentials = loadCredentials();
     
     try {
@@ -889,7 +945,7 @@ export default function HistoryPage() {
       
       // Merge with existing cache if same time range
       let mergedData: HistoryData;
-      if (!forceRefresh && cache && cache.timeRange === range) {
+      if (!shouldForceRefresh && cache && cache.timeRange === range) {
         mergedData = mergeHistoryData(cache.data, newData);
       } else {
         mergedData = newData;
@@ -907,6 +963,17 @@ export default function HistoryPage() {
         dataEnd,
         data: mergedData,
       };
+      
+      // Persist 24h cache to localStorage for instant load on navigation
+      if (range === '24h') {
+        saveHistoryCache({
+          timeRange: range,
+          dataStart,
+          dataEnd,
+          data: mergedData,
+          timestamp: Date.now(),
+        });
+      }
       
       setHistory(mergedData);
       setError(null);
@@ -956,9 +1023,17 @@ export default function HistoryPage() {
     }, 300);
   }, [fetchHistory, checkCacheCovers]);
 
-  // Initial fetch on mount
+  // Initial fetch on mount - refresh in background if we have cached data
   useEffect(() => {
-    fetchHistory(timeRange, endDate);
+    const hasCachedData = cacheRef.current !== null;
+    // If we have cached data, fetch in background without loading indicator
+    // Otherwise show loading while fetching
+    if (hasCachedData) {
+      // Background refresh - don't show loading, will update data silently
+      fetchHistory(timeRange, endDate, 'background');
+    } else {
+      fetchHistory(timeRange, endDate);
+    }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleTimeRangeChange = (range: TimeRange) => {

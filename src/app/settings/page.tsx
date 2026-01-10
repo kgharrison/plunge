@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { loadCache, saveCache, isCacheStale } from '@/lib/settings-cache';
@@ -89,6 +89,8 @@ const PUMP_TYPES: Record<number, string> = {
 
 export default function SettingsPage() {
   const router = useRouter();
+  
+  // Start with null - will load from cache in useEffect (avoids hydration mismatch)
   const [credentials, setCredentials] = useState<Credentials | null>(null);
   const [config, setConfig] = useState<FullConfig | null>(null);
   const [systemTime, setSystemTime] = useState<SystemTime | null>(null);
@@ -103,11 +105,18 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [accountExpanded, setAccountExpanded] = useState(false);
-
-  useEffect(() => {
+  
+  // Track if we've loaded cache
+  const cacheCheckedRef = useRef(false);
+  
+  // Load credentials and cache on mount - useLayoutEffect runs before paint
+  useLayoutEffect(() => {
+    if (cacheCheckedRef.current) return;
+    cacheCheckedRef.current = true;
+    
     const creds = loadCredentials();
     setCredentials(creds);
-    setIsFirstLogin(!creds); // Track if user has no credentials yet
+    setIsFirstLogin(!creds);
     if (creds) {
       setSettingsSystemName(creds.systemName);
       setSettingsPassword(creds.password);
@@ -119,8 +128,7 @@ export default function SettingsPage() {
       if (cache.config) setConfig(cache.config as FullConfig);
       if (cache.systemTime) setSystemTime(cache.systemTime as SystemTime);
       if (cache.status) setStatus(cache.status as PoolStatus);
-      // Only show loading if cache is stale
-      if (!isCacheStale()) {
+      if (cache.config) {
         setLoading(false);
       }
     }
@@ -147,9 +155,7 @@ export default function SettingsPage() {
         const errorData = !configRes.ok ? await configRes.json().catch(() => ({})) : await statusRes.json().catch(() => ({}));
         const errorMsg = errorData.message || errorData.error || 'Connection failed';
         setConnectionError(errorMsg);
-        setConfig(null);
-        setSystemTime(null);
-        setStatus(null);
+        // Don't clear cached data on error - keep showing what we have
         setLoading(false);
         return;
       }
@@ -158,7 +164,7 @@ export default function SettingsPage() {
       const newSystemTime = systemTimeRes.ok ? await systemTimeRes.json() : null;
       const newStatus = await statusRes.json();
       
-      // Try to get live pump status to merge with config
+      // Always fetch live pump status to get current RPM/watts
       if (newConfig?.equipment?.pumps?.length > 0) {
         const pumpId = newConfig.equipment.pumps[0].pumpId || 1;
         try {
@@ -186,11 +192,14 @@ export default function SettingsPage() {
       setStatus(newStatus);
       setConnectionError(null);
       
-      // Update cache
+      // Update cache with fresh data
       saveCache({ config: newConfig, systemTime: newSystemTime, status: newStatus });
     } catch (err) {
       console.error('Failed to fetch settings data:', err);
-      setConnectionError((err as Error).message || 'Connection failed');
+      // Don't clear cached data on network error
+      if (showLoading) {
+        setConnectionError((err as Error).message || 'Connection failed');
+      }
     } finally {
       setLoading(false);
     }
@@ -198,10 +207,10 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (credentials) {
-      // If we have cached data, fetch in background without loading indicator
+      // If we have cached data, always fetch in background without loading indicator
       const cache = loadCache();
-      const hasCache = cache && (cache.config || cache.systemTime || cache.status);
-      fetchData(!hasCache || isCacheStale());
+      const hasCache = cache && cache.config;
+      fetchData(!hasCache); // Only show loading if no cache at all
     } else {
       setLoading(false);
     }
