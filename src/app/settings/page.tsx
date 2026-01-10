@@ -102,6 +102,7 @@ export default function SettingsPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [saving, setSaving] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [accountExpanded, setAccountExpanded] = useState(false);
 
   useEffect(() => {
     const creds = loadCredentials();
@@ -313,114 +314,7 @@ export default function SettingsPage() {
           <h1 className="text-[28px] font-semibold tracking-tight leading-none">Settings</h1>
         </header>
 
-        {/* Account Section */}
-        <section className="mb-6">
-          <h2 className="text-[12px] font-semibold text-white/35 uppercase tracking-wider mb-3">Account</h2>
-          <div className="bg-white/5 rounded-xl overflow-hidden">
-            <div className="p-4">
-              <label className="block text-[14px] text-white/55 mb-2">System Name</label>
-              <input
-                type="text"
-                value={settingsSystemName}
-                onChange={(e) => setSettingsSystemName(e.target.value)}
-                placeholder="XX-XX-XX (from your pool controller)"
-                className="w-full bg-white/10 border border-white/10 rounded-lg px-3 py-2.5 text-[15px] placeholder:text-white/30 focus:outline-none focus:border-cyan-500/50"
-              />
-            </div>
-            <div className="p-4 pt-0">
-              <label className="block text-[14px] text-white/55 mb-2">Password</label>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={settingsPassword}
-                  onChange={(e) => setSettingsPassword(e.target.value)}
-                  placeholder="Your pool password"
-                  className="w-full bg-white/10 border border-white/10 rounded-lg px-3 py-2.5 pr-10 text-[15px] placeholder:text-white/30 focus:outline-none focus:border-cyan-500/50"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-0 bottom-0 flex items-center text-white/40 hover:text-white/60"
-                >
-                  {showPassword ? (
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-5 h-5">
-                      <path d="M3 3l18 18M10.5 10.677a2 2 0 002.823 2.823"/>
-                      <path d="M7.362 7.561C5.68 8.74 4.279 10.42 3 12c1.889 2.991 5.282 6 9 6 1.55 0 3.043-.523 4.395-1.35M12 6c4.008 0 6.701 3.158 9 6a15.66 15.66 0 01-1.078 1.5"/>
-                    </svg>
-                  ) : (
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-5 h-5">
-                      <path d="M12 14a2 2 0 100-4 2 2 0 000 4z"/>
-                      <path d="M21 12c-1.889 2.991-5.282 6-9 6s-7.111-3.009-9-6c2.299-2.842 4.992-6 9-6s6.701 3.158 9 6z"/>
-                    </svg>
-                  )}
-                </button>
-              </div>
-              <p className="text-[11px] text-white/30 mt-1.5">Required for remote access. Local WiFi connections use network security.</p>
-            </div>
-            <div className="p-4 pt-0 flex gap-2">
-              <button
-                onClick={handleSaveCredentials}
-                disabled={!settingsSystemName || !settingsPassword || saving}
-                className="flex-1 bg-cyan-500 disabled:bg-white/10 disabled:text-white/30 text-black font-semibold py-2.5 rounded-lg active:opacity-80"
-              >
-                {saving ? 'Verifying...' : credentials ? 'Update' : 'Login'}
-              </button>
-              {credentials && (
-                <button
-                  onClick={handleLogout}
-                  disabled={saving}
-                  className="px-4 bg-red-500/20 text-red-400 font-semibold py-2.5 rounded-lg active:opacity-80 disabled:opacity-50"
-                >
-                  Logout
-                </button>
-              )}
-            </div>
-          </div>
-        </section>
-
-        {/* Connection Info */}
-        {credentials && (
-          <section className="mb-6">
-            <h2 className="text-[12px] font-semibold text-white/35 uppercase tracking-wider mb-3">Connection</h2>
-            <div className="bg-white/5 rounded-xl overflow-hidden">
-              <div className="flex justify-between items-center p-4 border-b border-white/5">
-                <span className="text-[14px] text-white/55">Status</span>
-                {connectionError ? (
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-red-500" />
-                    <span className="text-[14px] font-medium text-red-400">Error</span>
-                  </div>
-                ) : status ? (
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2 h-2 rounded-full ${status.connectionType === 'local' ? 'bg-cyan-400' : 'bg-green-500'}`} />
-                    <span className="text-[14px] font-medium">{status.connectionType === 'local' ? 'Local WiFi' : 'Remote Cloud'}</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" />
-                    <span className="text-[14px] font-medium text-white/50">Connecting...</span>
-                  </div>
-                )}
-              </div>
-              {connectionError && (
-                <div className="p-4 border-b border-white/5 bg-red-500/10">
-                  <p className="text-[13px] text-red-400">{connectionError}</p>
-                </div>
-              )}
-              <div className="flex justify-between items-center p-4">
-                <span className="text-[14px] text-white/55">System</span>
-                <span className="text-[14px] font-medium text-white/80 truncate max-w-[180px]">{credentials?.systemName}</span>
-              </div>
-              {status?.connectionType === 'local' && (
-                <div className="px-4 pb-3">
-                  <p className="text-[11px] text-white/30">Connected via local network. Password is validated for remote connections only.</p>
-                </div>
-              )}
-            </div>
-          </section>
-        )}
-
-        {/* Equipment Section */}
+        {/* Equipment Section - Show first when logged in */}
         {config && (
           <section className="mb-6">
             <h2 className="text-[12px] font-semibold text-white/35 uppercase tracking-wider mb-3">Equipment</h2>
@@ -519,6 +413,120 @@ export default function SettingsPage() {
                   {config.controller.degC ? 'Celsius' : 'Fahrenheit'}
                 </span>
               </div>
+            )}
+          </div>
+        </section>
+
+        {/* Account & Connection Section - Collapsible when logged in */}
+        <section className="mb-6">
+          <h2 className="text-[12px] font-semibold text-white/35 uppercase tracking-wider mb-3">Account</h2>
+          <div className="bg-white/5 rounded-xl overflow-hidden">
+            {/* Collapsed summary when logged in */}
+            {credentials && !accountExpanded ? (
+              <>
+                <button
+                  onClick={() => setAccountExpanded(true)}
+                  className="w-full flex justify-between items-center p-4 active:bg-white/5"
+                >
+                  <div className="flex items-center gap-3">
+                    {connectionError ? (
+                      <span className="w-2 h-2 rounded-full bg-red-500" />
+                    ) : status ? (
+                      <span className={`w-2 h-2 rounded-full ${status.connectionType === 'local' ? 'bg-cyan-400' : 'bg-green-500'}`} />
+                    ) : (
+                      <span className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" />
+                    )}
+                    <div className="text-left">
+                      <div className="text-[14px] font-medium">
+                        {connectionError ? 'Connection Error' : status?.connectionType === 'local' ? 'Connected Locally' : status ? 'Connected via Cloud' : 'Connecting...'}
+                      </div>
+                      <div className="text-[13px] text-white/50 truncate max-w-[200px]">{credentials.systemName}</div>
+                    </div>
+                  </div>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-5 h-5 text-white/30">
+                    <path d="M6 9l6 6 6-6"/>
+                  </svg>
+                </button>
+                {connectionError && (
+                  <div className="px-4 pb-3 bg-red-500/10">
+                    <p className="text-[13px] text-red-400">{connectionError}</p>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                {/* Collapse button when expanded and logged in */}
+                {credentials && (
+                  <button
+                    onClick={() => setAccountExpanded(false)}
+                    className="w-full flex justify-between items-center p-4 border-b border-white/5 active:bg-white/5"
+                  >
+                    <span className="text-[14px] text-white/55">Manage Account</span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-5 h-5 text-white/30">
+                      <path d="M18 15l-6-6-6 6"/>
+                    </svg>
+                  </button>
+                )}
+                {/* Full form */}
+                <div className="p-4">
+                  <label className="block text-[14px] text-white/55 mb-2">System Name</label>
+                  <input
+                    type="text"
+                    value={settingsSystemName}
+                    onChange={(e) => setSettingsSystemName(e.target.value)}
+                    placeholder="XX-XX-XX (from your pool controller)"
+                    className="w-full bg-white/10 border border-white/10 rounded-lg px-3 py-2.5 text-[15px] placeholder:text-white/30 focus:outline-none focus:border-cyan-500/50"
+                  />
+                </div>
+                <div className="p-4 pt-0">
+                  <label className="block text-[14px] text-white/55 mb-2">Password</label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={settingsPassword}
+                      onChange={(e) => setSettingsPassword(e.target.value)}
+                      placeholder="Your pool password"
+                      className="w-full bg-white/10 border border-white/10 rounded-lg px-3 py-2.5 pr-10 text-[15px] placeholder:text-white/30 focus:outline-none focus:border-cyan-500/50"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-0 bottom-0 flex items-center text-white/40 hover:text-white/60"
+                    >
+                      {showPassword ? (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-5 h-5">
+                          <path d="M3 3l18 18M10.5 10.677a2 2 0 002.823 2.823"/>
+                          <path d="M7.362 7.561C5.68 8.74 4.279 10.42 3 12c1.889 2.991 5.282 6 9 6 1.55 0 3.043-.523 4.395-1.35M12 6c4.008 0 6.701 3.158 9 6a15.66 15.66 0 01-1.078 1.5"/>
+                        </svg>
+                      ) : (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-5 h-5">
+                          <path d="M12 14a2 2 0 100-4 2 2 0 000 4z"/>
+                          <path d="M21 12c-1.889 2.991-5.282 6-9 6s-7.111-3.009-9-6c2.299-2.842 4.992-6 9-6s6.701 3.158 9 6z"/>
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-white/30 mt-1.5">Required for remote access. Local WiFi connections use network security.</p>
+                </div>
+                <div className="p-4 pt-0 flex gap-2">
+                  <button
+                    onClick={handleSaveCredentials}
+                    disabled={!settingsSystemName || !settingsPassword || saving}
+                    className="flex-1 bg-cyan-500 disabled:bg-white/10 disabled:text-white/30 text-black font-semibold py-2.5 rounded-lg active:opacity-80"
+                  >
+                    {saving ? 'Verifying...' : credentials ? 'Update' : 'Login'}
+                  </button>
+                  {credentials && (
+                    <button
+                      onClick={handleLogout}
+                      disabled={saving}
+                      className="px-4 bg-red-500/20 text-red-400 font-semibold py-2.5 rounded-lg active:opacity-80 disabled:opacity-50"
+                    >
+                      Logout
+                    </button>
+                  )}
+                </div>
+              </>
             )}
           </div>
         </section>
