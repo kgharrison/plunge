@@ -178,7 +178,8 @@ export async function discoverLocalUnits(timeoutMs = 5000): Promise<LocalUnit[]>
         finder.close();
         resolve(units);
       }, timeoutMs);
-    } catch {
+    } catch (err) {
+      log(`Local discovery error`, { error: (err as Error).message });
       resolve([]);
     }
   });
@@ -202,6 +203,7 @@ export async function getConnectionInfo(credentials: Credentials, skipLocalDisco
     if (localUnits.length > 0) {
       // Found local unit - use it
       const unit = localUnits[0];
+      log(`Discovered local unit, caching connection`, { address: unit.address, gatewayName: unit.gatewayName });
       cachedConnectionInfo = {
         type: 'local',
         systemName: credentials.systemName,
@@ -215,6 +217,7 @@ export async function getConnectionInfo(credentials: Credentials, skipLocalDisco
   }
 
   // No local unit found or skipped - use remote
+  log(`No local units found, using remote connection`);
   cachedConnectionInfo = {
     type: 'remote',
     systemName: credentials.systemName
@@ -291,7 +294,7 @@ async function createClient(credentials: Credentials, skipLocalDiscovery = false
       clearConnectionCache();
       
       // Try local discovery
-      const localUnits = await discoverLocalUnits(3000);
+      const localUnits = await discoverLocalUnits(5000);
       if (localUnits.length > 0) {
         const localUnit = localUnits[0];
         log(`Connection #${connectionId}: Found local unit, connecting`, { address: localUnit.address, port: localUnit.port });
