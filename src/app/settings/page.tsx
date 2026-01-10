@@ -29,6 +29,7 @@ interface FullConfig {
       isRunning: boolean;
       watts: number;
       rpm: number;
+      gpm?: number;
     }[];
   };
 }
@@ -427,7 +428,7 @@ export default function SettingsPage() {
                     <div className="flex gap-4 mt-2 text-[13px]">
                       <span className="text-cyan-400">{config.equipment.pumps[0].rpm} RPM</span>
                       <span className="text-white/50">{config.equipment.pumps[0].watts}W</span>
-                      {config.equipment.pumps[0].gpm > 0 && config.equipment.pumps[0].gpm < 255 && (
+                      {config.equipment.pumps[0].gpm && config.equipment.pumps[0].gpm > 0 && config.equipment.pumps[0].gpm < 255 && (
                         <span className="text-white/50">{config.equipment.pumps[0].gpm} GPM</span>
                       )}
                     </div>

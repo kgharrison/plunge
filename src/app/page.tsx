@@ -832,13 +832,13 @@ export default function Home() {
 
             {/* Spa Card */}
             {spa && (
-              <div onClick={() => openTempSheet('spa')} className={`liquid-glass p-3.5 mb-3 cursor-pointer animate-slide-up ${getCircuitState(1) ? 'tint-cyan' : ''}`}>
-                <div className="flex justify-between items-center relative z-10">
+              <div
+                onClick={() => openTempSheet('spa')}
+                className={`liquid-glass p-4 mb-3 cursor-pointer animate-slide-up ${getCircuitState(1) ? 'tint-cyan' : ''}`}
+              >
+                <div className="flex justify-between items-center mb-2.5 relative z-10">
                   <div className="flex items-center gap-3">
                     <span className="text-[17px] font-semibold">{spa.name || 'Spa'}</span>
-                    <span className="text-[28px] font-light tracking-tight">
-                      {spa.currentTemp}<sup className="text-[15px] text-white/55">°</sup>
-                    </span>
                     {/* Heat mode indicator (only show when spa is on) */}
                     {getCircuitState(1) && (
                       <HeatModePill mode={getHeatMode('spa')} />
@@ -849,6 +849,25 @@ export default function Home() {
                     onToggle={() => toggleCircuit(1, getCircuitState(1))} 
                   />
                 </div>
+                <div className="flex flex-col items-center py-1.5 relative z-10">
+                  <TempRing current={spa.currentTemp} setPoint={spa.setPoint} isActive={getCircuitState(1)} />
+                </div>
+                {/* Schedule indicator */}
+                {(() => {
+                  const schedule = getCircuitSchedule(1);
+                  if (schedule) {
+                    return (
+                      <div className="flex items-center gap-1.5 mt-2 text-[11px] text-white/40 relative z-10">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5">
+                          <circle cx="12" cy="12" r="10"/>
+                          <polyline points="12 6 12 12 16 14"/>
+                        </svg>
+                        <span>{formatScheduleTime(schedule.startTime)} - {formatScheduleTime(schedule.stopTime)}</span>
+                      </div>
+                    );
+                  }
+                  return <div className="text-[11px] text-white/35 mt-1.5 relative z-10">Tap to adjust</div>;
+                })()}
               </div>
             )}
 
