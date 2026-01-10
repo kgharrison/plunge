@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { loadCache, saveCache, isCacheStale } from '@/lib/settings-cache';
 
@@ -87,11 +88,13 @@ const PUMP_TYPES: Record<number, string> = {
 };
 
 export default function SettingsPage() {
+  const router = useRouter();
   const [credentials, setCredentials] = useState<Credentials | null>(null);
   const [config, setConfig] = useState<FullConfig | null>(null);
   const [systemTime, setSystemTime] = useState<SystemTime | null>(null);
   const [status, setStatus] = useState<PoolStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isFirstLogin, setIsFirstLogin] = useState(false);
   
   // Form state
   const [settingsSystemName, setSettingsSystemName] = useState('');
@@ -103,6 +106,7 @@ export default function SettingsPage() {
   useEffect(() => {
     const creds = loadCredentials();
     setCredentials(creds);
+    setIsFirstLogin(!creds); // Track if user has no credentials yet
     if (creds) {
       setSettingsSystemName(creds.systemName);
       setSettingsPassword(creds.password);
@@ -230,6 +234,11 @@ export default function SettingsPage() {
       setCredentials(testCreds);
       setSettingsSystemName(systemName);
       setConnectionError(null);
+      
+      // Navigate to home on first login
+      if (isFirstLogin) {
+        router.push('/');
+      }
     } catch (err) {
       setConnectionError((err as Error).message || 'Failed to connect');
       // Don't save invalid credentials

@@ -22,10 +22,10 @@ export async function GET(request: NextRequest) {
     // Data returned consistently starts 16-24+ hours AFTER the requested fromTime, regardless
     // of timezone adjustments. This appears to be a firmware bug or undocumented behavior.
     //
-    // Workaround: Request data starting 48 hours earlier than actually needed.
+    // Workaround: Request data starting 72 hours earlier than actually needed.
     // The client will filter the results to only show the requested time range.
     
-    const BUFFER_HOURS = 48;
+    const BUFFER_HOURS = 72;
     const bufferMs = BUFFER_HOURS * 60 * 60 * 1000;
     
     const fromTime = fromTimeOriginal ? new Date(fromTimeOriginal.getTime() - bufferMs) : undefined;
@@ -42,6 +42,22 @@ export async function GET(request: NextRequest) {
     });
 
     const history = await getHistoryData(fromTime, toTime, credentials);
+    
+    // Filter out noise: runs shorter than 1 minute are likely spurious data
+    const MIN_RUN_DURATION_MS = 60 * 1000; // 1 minute
+    const filterShortRuns = (runs: { on: string; off: string }[]) => {
+      return runs.filter(run => {
+        const duration = new Date(run.off).getTime() - new Date(run.on).getTime();
+        return duration >= MIN_RUN_DURATION_MS;
+      });
+    };
+    
+    // Apply noise filter to equipment runs
+    // Pool runs are typically intentional even if brief (manual testing)
+    // But heater, solar, and spa can have spurious short triggers
+    history.heaterRuns = filterShortRuns(history.heaterRuns || []);
+    history.solarRuns = filterShortRuns(history.solarRuns || []);
+    history.spaRuns = filterShortRuns(history.spaRuns || []);
     
     // Log the range of data returned
     const airTemps = history.airTemps || [];

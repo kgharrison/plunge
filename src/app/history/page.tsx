@@ -60,7 +60,7 @@ function calculateRuntime(runs: RunPeriod[]): number {
 
 // Format minutes to hours and minutes
 function formatRuntime(minutes: number): string {
-  if (minutes < 1) return '< 1m';
+  if (minutes < 1) return '0';
   const hours = Math.floor(minutes / 60);
   const mins = Math.round(minutes % 60);
   if (hours === 0) return `${mins}m`;
@@ -96,6 +96,8 @@ function TempChart({
   spaRuns,
   viewStart,
   viewEnd,
+  timeRange,
+  isDragging,
 }: { 
   airTemps: TempPoint[]; 
   poolTemps: TempPoint[]; 
@@ -104,19 +106,64 @@ function TempChart({
   spaRuns: RunPeriod[];
   viewStart: number; // timestamp for left edge of view
   viewEnd: number;   // timestamp for right edge of view
+  timeRange: TimeRange;
+  isDragging?: boolean;
 }) {
-  // Filter data to only include points within the view window
-  // This prevents lines from being drawn into areas where we don't have data
-  const filterToViewWindow = (temps: TempPoint[]): TempPoint[] => {
-    return temps.filter(t => {
-      const time = new Date(t.time).getTime();
-      return time >= viewStart && time <= viewEnd;
-    });
+  // Filter data to view window, but include one point before and after
+  // so lines extend to the edges naturally (only if within reasonable distance)
+  const filterToViewWindowWithBoundary = (temps: TempPoint[], extendedBoundary: boolean = false): TempPoint[] => {
+    if (temps.length === 0) return [];
+    
+    // Max distance outside view to include a boundary point
+    // For air temp in 24h view, use 2 hours; otherwise use 1 hour
+    const maxBoundaryDistance = (extendedBoundary && timeRange === '24h') 
+      ? 2 * 60 * 60 * 1000 
+      : 60 * 60 * 1000;
+    
+    // Sort by time first
+    const sorted = [...temps].sort((a, b) => 
+      new Date(a.time).getTime() - new Date(b.time).getTime()
+    );
+    
+    // Find indices of boundary points
+    let firstInViewIdx = sorted.findIndex(t => new Date(t.time).getTime() >= viewStart);
+    if (firstInViewIdx === -1) firstInViewIdx = sorted.length;
+    
+    let lastInViewIdx = -1;
+    for (let i = sorted.length - 1; i >= 0; i--) {
+      if (new Date(sorted[i].time).getTime() <= viewEnd) {
+        lastInViewIdx = i;
+        break;
+      }
+    }
+    
+    // Determine start index - include one before if close enough
+    let startIdx = firstInViewIdx;
+    if (firstInViewIdx > 0) {
+      const prevPointTime = new Date(sorted[firstInViewIdx - 1].time).getTime();
+      if (viewStart - prevPointTime <= maxBoundaryDistance) {
+        startIdx = firstInViewIdx - 1;
+      }
+    }
+    
+    // Determine end index - include one after if close enough
+    let endIdx = lastInViewIdx;
+    if (lastInViewIdx < sorted.length - 1 && lastInViewIdx >= 0) {
+      const nextPointTime = new Date(sorted[lastInViewIdx + 1].time).getTime();
+      if (nextPointTime - viewEnd <= maxBoundaryDistance) {
+        endIdx = lastInViewIdx + 1;
+      }
+    }
+    
+    // Handle edge cases
+    if (startIdx > endIdx || endIdx < 0) return [];
+    
+    return sorted.slice(startIdx, endIdx + 1);
   };
 
-  const filteredAirTemps = filterToViewWindow(airTemps);
-  const filteredPoolTemps = filterToViewWindow(poolTemps);
-  const filteredSpaTemps = filterToViewWindow(spaTemps);
+  const filteredAirTemps = filterToViewWindowWithBoundary(airTemps, true);  // Extended boundary for air
+  const filteredPoolTemps = filterToViewWindowWithBoundary(poolTemps, false);
+  const filteredSpaTemps = filterToViewWindowWithBoundary(spaTemps, false);
 
   // Combine all temps to find temperature range (use filtered data for display)
   const allTemps = [...filteredAirTemps, ...filteredPoolTemps, ...filteredSpaTemps];
@@ -163,45 +210,127 @@ function TempChart({
     return sorted.map((p, i) => `${i === 0 ? 'M' : 'L'} ${toX(p.time)} ${toY(p.temp)}`).join(' ');
   };
 
-  // Create segmented paths based on run status - each segment connects consecutive points
-  const createSegmentedPaths = (temps: TempPoint[], runs: RunPeriod[]) => {
-    if (temps.length === 0) return { duringRun: '', notDuringRun: '' };
+  // Create path for each run period - extends to run boundaries
+  const createRunOnlyPath = (temps: TempPoint[], runs: RunPeriod[]): string => {
+    if (temps.length === 0 || runs.length === 0) return '';
     const sorted = [...temps].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
     
-    const duringRunSegments: string[] = [];
-    const notDuringRunSegments: string[] = [];
+    const paths: string[] = [];
     
-    for (let i = 0; i < sorted.length - 1; i++) {
-      const p1 = sorted[i];
-      const p2 = sorted[i + 1];
-      // A segment is "during run" if EITHER endpoint is during a run (show it bright if pump was on at any point)
-      const segment = `M ${toX(p1.time)} ${toY(p1.temp)} L ${toX(p2.time)} ${toY(p2.temp)}`;
+    for (const run of runs) {
+      const runStart = Math.max(new Date(run.on).getTime(), viewStart);
+      const runEnd = Math.min(new Date(run.off).getTime(), viewEnd);
       
-      if (isDuringRun(p1.time, runs) || isDuringRun(p2.time, runs)) {
-        duringRunSegments.push(segment);
+      // Skip runs outside view window
+      if (runEnd <= runStart) continue;
+      
+      // Get points during this specific run
+      const runPoints = sorted.filter(p => {
+        const t = new Date(p.time).getTime();
+        return t >= new Date(run.on).getTime() && t <= new Date(run.off).getTime();
+      });
+      
+      if (runPoints.length === 0) continue;
+      
+      // Build path: extend from run start, through data points, to run end
+      const pathParts: string[] = [];
+      
+      // Start at run boundary with first point's temperature
+      const firstPoint = runPoints[0];
+      const firstPointTime = new Date(firstPoint.time).getTime();
+      if (firstPointTime > runStart) {
+        // Extend horizontally from run start to first data point
+        pathParts.push(`M ${toX(new Date(runStart).toISOString())} ${toY(firstPoint.temp)}`);
+        pathParts.push(`L ${toX(firstPoint.time)} ${toY(firstPoint.temp)}`);
       } else {
-        notDuringRunSegments.push(segment);
+        pathParts.push(`M ${toX(firstPoint.time)} ${toY(firstPoint.temp)}`);
       }
+      
+      // Add all intermediate points
+      for (let i = 1; i < runPoints.length; i++) {
+        pathParts.push(`L ${toX(runPoints[i].time)} ${toY(runPoints[i].temp)}`);
+      }
+      
+      // Extend to run end with last point's temperature
+      const lastPoint = runPoints[runPoints.length - 1];
+      const lastPointTime = new Date(lastPoint.time).getTime();
+      if (lastPointTime < runEnd) {
+        pathParts.push(`L ${toX(new Date(runEnd).toISOString())} ${toY(lastPoint.temp)}`);
+      }
+      
+      paths.push(pathParts.join(' '));
     }
     
-    return {
-      duringRun: duringRunSegments.join(' '),
-      notDuringRun: notDuringRunSegments.join(' '),
-    };
+    return paths.join(' ');
   };
 
-  // Create area path (for gradient fill) - only for "during run" portions
+  // Create area paths (for gradient fill) - separate path for each run period, extends to run boundaries
   const createAreaPath = (temps: TempPoint[], runs: RunPeriod[]): string => {
-    if (temps.length === 0) return '';
+    if (temps.length === 0 || runs.length === 0) return '';
     const sorted = [...temps].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
-    // Filter to only points during runs for the area fill
-    const duringRunPoints = sorted.filter(p => isDuringRun(p.time, runs));
-    if (duringRunPoints.length < 2) return '';
     
-    const linePath = duringRunPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${toX(p.time)} ${toY(p.temp)}`).join(' ');
-    const lastX = toX(duringRunPoints[duringRunPoints.length - 1].time);
-    const firstX = toX(duringRunPoints[0].time);
-    return `${linePath} L ${lastX} 100 L ${firstX} 100 Z`;
+    // Create a separate closed area for each run period
+    const areaPaths: string[] = [];
+    
+    for (const run of runs) {
+      const runStart = Math.max(new Date(run.on).getTime(), viewStart);
+      const runEnd = Math.min(new Date(run.off).getTime(), viewEnd);
+      
+      // Skip runs outside view window
+      if (runEnd <= runStart) continue;
+      
+      // Get points during this specific run
+      const runPoints = sorted.filter(p => {
+        const t = new Date(p.time).getTime();
+        return t >= new Date(run.on).getTime() && t <= new Date(run.off).getTime();
+      });
+      
+      if (runPoints.length === 0) continue;
+      
+      // Build area path: extend from run start, through data points, to run end
+      const pathParts: string[] = [];
+      
+      // Start at run boundary with first point's temperature
+      const firstPoint = runPoints[0];
+      const firstPointTime = new Date(firstPoint.time).getTime();
+      const effectiveStart = Math.max(runStart, viewStart);
+      
+      if (firstPointTime > effectiveStart) {
+        // Extend horizontally from run start to first data point
+        pathParts.push(`M ${toX(new Date(effectiveStart).toISOString())} ${toY(firstPoint.temp)}`);
+        pathParts.push(`L ${toX(firstPoint.time)} ${toY(firstPoint.temp)}`);
+      } else {
+        pathParts.push(`M ${toX(firstPoint.time)} ${toY(firstPoint.temp)}`);
+      }
+      
+      // Add all intermediate points
+      for (let i = 1; i < runPoints.length; i++) {
+        pathParts.push(`L ${toX(runPoints[i].time)} ${toY(runPoints[i].temp)}`);
+      }
+      
+      // Extend to run end with last point's temperature
+      const lastPoint = runPoints[runPoints.length - 1];
+      const lastPointTime = new Date(lastPoint.time).getTime();
+      const effectiveEnd = Math.min(runEnd, viewEnd);
+      
+      if (lastPointTime < effectiveEnd) {
+        pathParts.push(`L ${toX(new Date(effectiveEnd).toISOString())} ${toY(lastPoint.temp)}`);
+      }
+      
+      // Close the area path - go down to bottom, across, and back up
+      const startX = firstPointTime > effectiveStart 
+        ? toX(new Date(effectiveStart).toISOString())
+        : toX(firstPoint.time);
+      const endX = lastPointTime < effectiveEnd
+        ? toX(new Date(effectiveEnd).toISOString())
+        : toX(lastPoint.time);
+      
+      pathParts.push(`L ${endX} 100 L ${startX} 100 Z`);
+      
+      areaPaths.push(pathParts.join(' '));
+    }
+    
+    return areaPaths.join(' ');
   };
 
   // Create simple area path for air temps (no run status)
@@ -214,22 +343,17 @@ function TempChart({
     return `${linePath} L ${lastX} 100 L ${firstX} 100 Z`;
   };
 
-  // Get segmented paths for pool and spa - use FILTERED data
-  const poolSegments = createSegmentedPaths(filteredPoolTemps, poolRuns);
-  const spaSegments = createSegmentedPaths(filteredSpaTemps, spaRuns);
+  // Get paths for pool and spa - only draw during runs
+  const poolPath = createRunOnlyPath(filteredPoolTemps, poolRuns);
+  const spaPath = createRunOnlyPath(filteredSpaTemps, spaRuns);
 
   return (
-    <div className="relative">
-      {/* Y-axis labels */}
-      <div className="absolute left-0 top-0 bottom-6 w-8 flex flex-col justify-between text-[10px] text-white/30">
-        <span>{Math.round(maxTemp)}°</span>
-        <span>{Math.round((maxTemp + minTemp) / 2)}°</span>
-        <span>{Math.round(minTemp)}°</span>
-      </div>
-      
+    <div>
       {/* Chart */}
-      <div className="ml-10 h-[200px]">
-        <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full">
+      <div className="relative h-[200px]">
+        {/* Time grid - rendered first so it's behind the chart lines */}
+        <TimeGrid viewStart={viewStart} viewEnd={viewEnd} timeRange={timeRange} isDragging={isDragging} />
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full relative z-10">
           <defs>
             <linearGradient id="airGradient" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="rgba(255, 255, 255, 0.3)" />
@@ -255,34 +379,19 @@ function TempChart({
           {filteredPoolTemps.length > 0 && <path d={createAreaPath(filteredPoolTemps, poolRuns)} fill="url(#poolGradient)" />}
           {filteredSpaTemps.length > 0 && <path d={createAreaPath(filteredSpaTemps, spaRuns)} fill="url(#spaGradient)" />}
           
-          {/* Lines - continuous but styled by segment based on pump status, using filtered data */}
+          {/* Lines - air temp is continuous, pool/spa only during runs */}
           {filteredAirTemps.length > 0 && (
             <path d={createPath(filteredAirTemps)} fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="0.8" vectorEffect="non-scaling-stroke" />
           )}
-          {/* Pool segments when pump is OFF - dimmed/dashed */}
-          {poolSegments.notDuringRun && (
-            <path d={poolSegments.notDuringRun} fill="none" stroke="rgba(0, 210, 211, 0.25)" strokeWidth="0.8" strokeDasharray="2,2" vectorEffect="non-scaling-stroke" />
+          {/* Pool line - only when pump is ON */}
+          {poolPath && (
+            <path d={poolPath} fill="none" stroke="#00d2d3" strokeWidth="1.2" vectorEffect="non-scaling-stroke" />
           )}
-          {/* Pool segments when pump is ON - solid/bright */}
-          {poolSegments.duringRun && (
-            <path d={poolSegments.duringRun} fill="none" stroke="#00d2d3" strokeWidth="1.2" vectorEffect="non-scaling-stroke" />
-          )}
-          {/* Spa segments when pump is OFF - dimmed/dashed */}
-          {spaSegments.notDuringRun && (
-            <path d={spaSegments.notDuringRun} fill="none" stroke="rgba(255, 159, 10, 0.25)" strokeWidth="0.8" strokeDasharray="2,2" vectorEffect="non-scaling-stroke" />
-          )}
-          {/* Spa segments when pump is ON - solid/bright */}
-          {spaSegments.duringRun && (
-            <path d={spaSegments.duringRun} fill="none" stroke="#ff9f0a" strokeWidth="1.2" vectorEffect="non-scaling-stroke" />
+          {/* Spa line - only when pump is ON */}
+          {spaPath && (
+            <path d={spaPath} fill="none" stroke="#ff9f0a" strokeWidth="1.2" vectorEffect="non-scaling-stroke" />
           )}
         </svg>
-      </div>
-      
-      {/* X-axis labels - use view window, not data range */}
-      <div className="ml-10 flex justify-between text-[10px] text-white/30 mt-1">
-        <span>{formatTime(new Date(viewStart).toISOString())}</span>
-        <span>{formatTime(new Date((viewStart + viewEnd) / 2).toISOString())}</span>
-        <span>{formatTime(new Date(viewEnd).toISOString())}</span>
       </div>
       
       {/* Legend */}
@@ -298,10 +407,6 @@ function TempChart({
         <div className="flex items-center gap-1.5">
           <div className="w-3 h-0.5 bg-[#ff9f0a] rounded" />
           <span className="text-[11px] text-white/50">Spa</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-3 h-0.5 border border-dashed border-white/30 rounded" />
-          <span className="text-[10px] text-white/30">pump off</span>
         </div>
       </div>
     </div>
@@ -376,8 +481,8 @@ function LongitudinalTimeline({ history, viewStart, viewEnd }: { history: Histor
 
   return (
     <div>
-      {/* Timeline rows - aligned with temperature chart */}
-      <div className="relative ml-10" style={{ height: types.length * (rowHeight + rowGap) }}>
+      {/* Timeline rows */}
+      <div className="relative" style={{ height: types.length * (rowHeight + rowGap) }}>
         {types.map((type, rowIndex) => {
           const typeEvents = events.filter(e => e.type === type);
           const color = colorMap[type] || '#666';
@@ -414,7 +519,7 @@ function LongitudinalTimeline({ history, viewStart, viewEnd }: { history: Histor
               })}
               
               {/* Row label */}
-              <span className="absolute left-2 text-[10px] font-medium text-white/60 z-10">
+              <span className="absolute left-2 text-[10px] font-medium text-white/50 z-10">
                 {type}
               </span>
             </div>
@@ -575,11 +680,7 @@ const TIME_RANGES: { value: TimeRange; label: string; hours: number }[] = [
 ];
 
 // Time grid component - vertical lines at fixed times that scroll with drag
-function TimeGrid({ endDate, timeRange, isDragging }: { endDate: Date; timeRange: TimeRange; isDragging?: boolean }) {
-  const rangeConfig = TIME_RANGES.find(r => r.value === timeRange);
-  const hours = rangeConfig?.hours || 24;
-  const viewStart = endDate.getTime() - hours * 60 * 60 * 1000;
-  const viewEnd = endDate.getTime();
+function TimeGrid({ viewStart, viewEnd, timeRange, isDragging }: { viewStart: number; viewEnd: number; timeRange: TimeRange; isDragging?: boolean }) {
   const viewSpan = viewEnd - viewStart;
   
   // Determine grid interval based on time range
@@ -589,7 +690,12 @@ function TimeGrid({ endDate, timeRange, isDragging }: { endDate: Date; timeRange
   
   if (timeRange === '24h') {
     intervalMs = 2 * 60 * 60 * 1000; // Every 2 hours
-    formatLabel = (d) => `${d.getHours()}:00`;
+    formatLabel = (d) => {
+      const hour = d.getHours();
+      const ampm = hour >= 12 ? 'PM' : 'AM';
+      const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+      return `${hour12}${ampm}`;
+    };
     isMajorLine = (d) => d.getHours() === 0 || d.getHours() === 12;
   } else if (timeRange === '7d') {
     intervalMs = 24 * 60 * 60 * 1000; // Every day
@@ -704,6 +810,7 @@ export default function HistoryPage() {
   const [error, setError] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState<TimeRange>('24h');
   const [endDate, setEndDate] = useState<Date>(() => new Date());
+  const endDateRef = useRef<Date>(endDate); // Track latest endDate for use in callbacks
   const [isDragging, setIsDragging] = useState(false);
   const [mounted, setMounted] = useState(false);
   
@@ -726,13 +833,11 @@ export default function HistoryPage() {
   const fetchHistory = useCallback(async (range: TimeRange, end: Date, forceRefresh = false) => {
     const rangeConfig = TIME_RANGES.find(r => r.value === range);
     const hours = rangeConfig?.hours || 24;
-    
-    // Calculate exact view window (what's shown on the graph)
     const viewEnd = end.getTime();
     const viewStart = viewEnd - hours * 60 * 60 * 1000;
     
     // Check cache - if we have data covering the view window, use it
-    const cache = cacheRef.current;
+    let cache = cacheRef.current;
     if (!forceRefresh && cache && cache.timeRange === range) {
       // Check if cache covers the view window (with some tolerance for edge cases)
       const tolerance = 5 * 60 * 1000; // 5 minutes tolerance
@@ -743,23 +848,28 @@ export default function HistoryPage() {
         setLoading(false);
         return;
       }
+      
+      // If view is completely outside cache range (more than 1 range away), clear cache and fetch fresh
+      const rangeMs = hours * 60 * 60 * 1000;
+      if (viewEnd < cache.dataStart - rangeMs || viewStart > cache.dataEnd + rangeMs) {
+        cacheRef.current = null;
+        cache = null; // Also clear local reference
+      }
     }
     
-    // Request extra buffer to account for controller timezone quirks
-    const bufferMs = 48 * 60 * 60 * 1000; // 48 hours buffer
-    let fetchStart = viewStart - bufferMs;
-    let fetchEnd = viewEnd + bufferMs;
+    // Request the exact view window - server-side adds buffer for controller quirks
+    let fetchStart = viewStart;
+    let fetchEnd = viewEnd;
     
     // If we have cache, only fetch what we're missing (extend in the needed direction)
     if (!forceRefresh && cache && cache.timeRange === range) {
       if (viewStart < cache.dataStart && viewEnd <= cache.dataEnd) {
         // Need earlier data - fetch from new start to cache start
-        fetchEnd = cache.dataStart + bufferMs;
+        fetchEnd = cache.dataStart;
       } else if (viewEnd > cache.dataEnd && viewStart >= cache.dataStart) {
         // Need later data - fetch from cache end to new end
-        fetchStart = cache.dataEnd - bufferMs;
+        fetchStart = cache.dataEnd;
       }
-      // If we need both directions, fetch the full range (already set above)
     }
     
     isFetchingRef.current = true;
@@ -872,9 +982,11 @@ export default function HistoryPage() {
     const now = new Date();
     if (newEndDate > now) {
       setEndDate(now);
+      endDateRef.current = now;
       fetchHistory(timeRange, now);
     } else {
       setEndDate(newEndDate);
+      endDateRef.current = newEndDate;
       fetchHistory(timeRange, newEndDate);
     }
   };
@@ -903,15 +1015,17 @@ export default function HistoryPage() {
     // Clamp to not go into future
     const clampedDate = newEndDate > now ? now : newEndDate;
     setEndDate(clampedDate);
+    endDateRef.current = clampedDate; // Keep ref in sync
     
     // Use debounced fetch during drag
     debouncedFetch(timeRange, clampedDate);
   };
 
   const handleDragEnd = () => {
+    const currentEndDate = endDateRef.current; // Use ref for latest value
     if (dragRef.current) {
-      // Trigger final fetch when drag ends
-      debouncedFetch(timeRange, endDate);
+      // Trigger final fetch when drag ends - use ref for current value
+      debouncedFetch(timeRange, currentEndDate);
     }
     dragRef.current = null;
     setIsDragging(false);
@@ -965,21 +1079,22 @@ export default function HistoryPage() {
     const formatDate = (d: Date) => {
       return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     };
-    const formatTime = (d: Date) => {
+    const formatTimeStr = (d: Date) => {
       return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
     };
     
     if (timeRange === '24h') {
-      return `${formatDate(fromTime)} ${formatTime(fromTime)} - ${formatDate(endDate)} ${formatTime(endDate)}`;
+      return `${formatDate(fromTime)} ${formatTimeStr(fromTime)} - ${formatDate(endDate)} ${formatTimeStr(endDate)}`;
     }
     return `${formatDate(fromTime)} - ${formatDate(endDate)}`;
   };
   
   const isAtPresent = endDate.getTime() >= Date.now() - 60000;
 
-  // Calculate view window
+  // Calculate view window based on endDate
+  const rangeHours = TIME_RANGES.find(r => r.value === timeRange)?.hours || 24;
   const viewEnd = endDate.getTime();
-  const viewStart = viewEnd - (TIME_RANGES.find(r => r.value === timeRange)?.hours || 24) * 60 * 60 * 1000;
+  const viewStart = viewEnd - rangeHours * 60 * 60 * 1000;
 
   // Filter runs to only include those overlapping with view window, and clip to window bounds
   const filterRunsToWindow = (runs: RunPeriod[]): RunPeriod[] => {
@@ -1080,6 +1195,7 @@ export default function HistoryPage() {
               onClick={() => {
                 const now = new Date();
                 setEndDate(now);
+                endDateRef.current = now;
                 // Force refresh when jumping to now to get latest data
                 fetchHistory(timeRange, now, true);
               }}
@@ -1213,9 +1329,7 @@ export default function HistoryPage() {
             {/* Temperature Chart */}
             <div className="mb-6">
               <h2 className="text-[13px] font-semibold text-white/35 uppercase tracking-wider mb-3">Temperature</h2>
-              <div className="bg-white/5 rounded-xl p-4 relative overflow-hidden">
-                {/* Time grid overlay - only on the chart */}
-                {mounted && <TimeGrid endDate={endDate} timeRange={timeRange} isDragging={isDragging} />}
+              <div className="bg-white/5 rounded-xl p-4 overflow-hidden relative">
                 <TempChart
                   airTemps={history.airTemps}
                   poolTemps={history.poolTemps}
@@ -1224,6 +1338,8 @@ export default function HistoryPage() {
                   spaRuns={history.spaRuns}
                   viewStart={viewStart}
                   viewEnd={viewEnd}
+                  timeRange={timeRange}
+                  isDragging={isDragging}
                 />
                 {/* Loading overlay on chart */}
                 {loading && (
