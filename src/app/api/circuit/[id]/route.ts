@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { setCircuitState } from '@/lib/screenlogic';
-import { getCredentialsFromRequest } from '@/lib/api-utils';
+import { getCredentialsFromRequest, isDemoMode } from '@/lib/api-utils';
+import { setDemoCircuitState } from '@/lib/demo-data';
 
 export async function POST(
   request: NextRequest,
@@ -20,6 +21,12 @@ export async function POST(
     }
 
     const credentials = getCredentialsFromRequest(request);
+    
+    if (isDemoMode(credentials)) {
+      await setDemoCircuitState(circuitId, state);
+      return NextResponse.json({ success: true, circuitId, state, demo: true });
+    }
+    
     await setCircuitState(circuitId, state, credentials);
     return NextResponse.json({ success: true, circuitId, state });
   } catch (error) {

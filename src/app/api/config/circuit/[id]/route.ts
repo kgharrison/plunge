@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { setCircuitRuntime, setCircuitConfig } from '@/lib/screenlogic';
-import { getCredentialsFromRequest } from '@/lib/api-utils';
+import { getCredentialsFromRequest, isDemoMode } from '@/lib/api-utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,6 +26,11 @@ export async function PUT(
     }
     
     const credentials = getCredentialsFromRequest(request);
+    
+    if (isDemoMode(credentials)) {
+      return NextResponse.json({ success: true, demo: true });
+    }
+    
     const body = await request.json();
     
     // Check if this is a runtime update or a full config update

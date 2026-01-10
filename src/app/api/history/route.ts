@@ -1,12 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCredentialsFromRequest } from '@/lib/api-utils';
+import { getCredentialsFromRequest, isDemoMode } from '@/lib/api-utils';
 import { getHistoryData } from '@/lib/screenlogic';
+import { getDemoHistory } from '@/lib/demo-data';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
     const credentials = getCredentialsFromRequest(request);
+    
+    // Demo mode - return adjusted historical data
+    if (isDemoMode(credentials)) {
+      const { searchParams } = new URL(request.url);
+      const fromParam = searchParams.get('from');
+      const toParam = searchParams.get('to');
+      
+      const fromTime = fromParam ? new Date(fromParam) : undefined;
+      const toTime = toParam ? new Date(toParam) : new Date();
+      
+      const history = await getDemoHistory(fromTime, toTime);
+      return NextResponse.json(history);
+    }
 
     // Parse optional time range from query params
     const { searchParams } = new URL(request.url);

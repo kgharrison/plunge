@@ -1,10 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getConnectionInfo, clearConnectionCache, discoverLocalUnits, getCredentials } from '@/lib/screenlogic';
-import { getCredentialsFromRequest } from '@/lib/api-utils';
+import { getCredentialsFromRequest, isDemoMode } from '@/lib/api-utils';
 
 export async function GET(request: NextRequest) {
   try {
     const requestCredentials = getCredentialsFromRequest(request);
+    
+    // Demo mode - return fake connection info
+    if (isDemoMode(requestCredentials)) {
+      return NextResponse.json({
+        type: 'demo',
+        systemName: 'demo',
+        localAvailable: false,
+        localUnits: []
+      });
+    }
+    
     const credentials = getCredentials(requestCredentials);
     const connInfo = await getConnectionInfo(credentials);
     const localUnits = await discoverLocalUnits(1500);

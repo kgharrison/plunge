@@ -73,7 +73,7 @@ interface PoolStatus {
   airTemp: number;
   bodies: PoolBody[];
   circuits: Circuit[];
-  connectionType?: 'local' | 'remote';
+  connectionType?: 'local' | 'remote' | 'demo';
   pumpIds?: number[];
   freezeMode?: boolean;
   poolDelay?: boolean;
@@ -299,7 +299,15 @@ export default function Home() {
     if (cacheCheckedRef.current) return;
     cacheCheckedRef.current = true;
     
-    const stored = loadCredentials();
+    let stored = loadCredentials();
+    
+    // Auto-login with demo credentials when NEXT_PUBLIC_DEMO=true and no credentials exist
+    if (!stored && process.env.NEXT_PUBLIC_DEMO === 'true') {
+      stored = { systemName: 'demo', password: 'demo' };
+      // Save demo credentials so other pages can use them
+      localStorage.setItem(CREDENTIALS_KEY, JSON.stringify(stored));
+    }
+    
     setCredentials(stored);
     setCredentialsLoaded(true);
     
@@ -467,6 +475,7 @@ export default function Home() {
   const toggleCircuit = async (circuitId: number, currentState: boolean) => {
     const newState = !currentState;
     const requestId = `circuit-${circuitId}-${Date.now()}`;
+    const isDemo = credentials?.systemName === 'demo';
     
     // Optimistically update UI immediately
     setOptimisticCircuits(prev => ({ ...prev, [circuitId]: newState }));
@@ -483,6 +492,12 @@ export default function Home() {
       });
       
       if (!res.ok) throw new Error('Failed to toggle circuit');
+      
+      // In demo mode, just keep the optimistic state (no polling needed)
+      if (isDemo) {
+        pendingRequests.current.delete(requestId);
+        return;
+      }
       
       // Poll for confirmation (up to 10 seconds)
       let confirmed = false;
@@ -750,8 +765,8 @@ export default function Home() {
                 <span className="text-red-400">Offline</span>
               ) : (
                 <>
-                  <span className={`w-2 h-2 rounded-full shadow-[0_0_8px_rgba(48,209,88,0.6)] ${status?.connectionType === 'local' ? 'bg-cyan-400' : 'bg-green-500'}`} />
-                  <span>{status?.connectionType === 'local' ? 'Local' : 'Remote'}</span>
+                  <span className={`w-2 h-2 rounded-full shadow-[0_0_8px_rgba(48,209,88,0.6)] ${status?.connectionType === 'local' ? 'bg-cyan-400' : status?.connectionType === 'demo' ? 'bg-purple-400' : 'bg-green-500'}`} />
+                  <span>{status?.connectionType === 'local' ? 'Local' : status?.connectionType === 'demo' ? 'Demo' : 'Remote'}</span>
                 </>
               )}
             </div>

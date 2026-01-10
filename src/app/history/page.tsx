@@ -24,6 +24,7 @@ interface HistoryData {
   solarRuns: RunPeriod[];
   heaterRuns: RunPeriod[];
   lightRuns: RunPeriod[];
+  demoDataEnd?: string; // For demo mode - the "now" timestamp
 }
 
 const CREDENTIALS_KEY = 'plunge_credentials';
@@ -843,6 +844,13 @@ export default function HistoryPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [mounted, setMounted] = useState(false);
   
+  // Demo mode: track the "now" from demo data (end of available data)
+  const [demoNow, setDemoNow] = useState<Date | null>(null);
+  const demoInitializedRef = useRef(false);
+  
+  // Helper to get the effective "now" - use demoNow if in demo mode, otherwise real now
+  const getNow = useCallback(() => demoNow || new Date(), [demoNow]);
+  
   // Set mounted after first render to avoid hydration mismatch
   useEffect(() => {
     setMounted(true);
@@ -942,6 +950,18 @@ export default function HistoryPage() {
       });
       if (!res.ok) throw new Error('Failed to fetch history');
       const newData: HistoryData = await res.json();
+      
+      // Check for demo mode - if demoDataEnd is present, set it as the "now"
+      if (newData.demoDataEnd) {
+        const demoEnd = new Date(newData.demoDataEnd);
+        setDemoNow(demoEnd);
+        // On first load in demo mode, set endDate to the demo data end (only once)
+        if (!demoInitializedRef.current) {
+          demoInitializedRef.current = true;
+          setEndDate(demoEnd);
+          endDateRef.current = demoEnd;
+        }
+      }
       
       // Merge with existing cache if same time range
       let mergedData: HistoryData;
@@ -1053,8 +1073,8 @@ export default function HistoryPage() {
     
     const newEndDate = new Date(endDate.getTime() + (direction === 'forward' ? deltaMs : -deltaMs));
     
-    // Don't allow navigating into the future
-    const now = new Date();
+    // Don't allow navigating into the future (use demoNow in demo mode)
+    const now = getNow();
     if (newEndDate > now) {
       setEndDate(now);
       endDateRef.current = now;
@@ -1085,9 +1105,9 @@ export default function HistoryPage() {
     const deltaMs = deltaX * msPerPixel;
     
     const newEndDate = new Date(dragRef.current.startEndDate.getTime() + deltaMs);
-    const now = new Date();
+    const now = getNow();
     
-    // Clamp to not go into future
+    // Clamp to not go into future (use demoNow in demo mode)
     const clampedDate = newEndDate > now ? now : newEndDate;
     setEndDate(clampedDate);
     endDateRef.current = clampedDate; // Keep ref in sync
@@ -1164,7 +1184,7 @@ export default function HistoryPage() {
     return `${formatDate(fromTime)} - ${formatDate(endDate)}`;
   };
   
-  const isAtPresent = endDate.getTime() >= Date.now() - 60000;
+  const isAtPresent = endDate.getTime() >= getNow().getTime() - 60000;
 
   // Calculate view window based on endDate
   const rangeHours = TIME_RANGES.find(r => r.value === timeRange)?.hours || 24;
@@ -1268,15 +1288,15 @@ export default function HistoryPage() {
           {!isAtPresent && (
             <button
               onClick={() => {
-                const now = new Date();
+                const now = getNow();
                 setEndDate(now);
                 endDateRef.current = now;
-                // Force refresh when jumping to now to get latest data
-                fetchHistory(timeRange, now, true);
+                // Force refresh when jumping to now to get latest data (unless in demo mode)
+                fetchHistory(timeRange, now, !demoNow);
               }}
               className="text-[11px] text-cyan-400 px-2 py-0.5 rounded-full bg-cyan-500/10"
             >
-              Jump to Now
+              {demoNow ? 'Jump to Latest' : 'Jump to Now'}
             </button>
           )}
         </div>

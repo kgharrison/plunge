@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cancelDelay } from '@/lib/screenlogic';
-import { getCredentialsFromRequest } from '@/lib/api-utils';
+import { getCredentialsFromRequest, isDemoMode } from '@/lib/api-utils';
+import { cancelDemoDelay } from '@/lib/demo-data';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,6 +9,12 @@ export const dynamic = 'force-dynamic';
 export async function DELETE(request: NextRequest) {
   try {
     const credentials = getCredentialsFromRequest(request);
+    
+    if (isDemoMode(credentials)) {
+      await cancelDemoDelay();
+      return NextResponse.json({ success: true, demo: true });
+    }
+    
     await cancelDelay(credentials);
     return NextResponse.json({ success: true });
   } catch (error) {

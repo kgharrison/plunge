@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { setBodyTemperature } from '@/lib/screenlogic';
-import { getCredentialsFromRequest } from '@/lib/api-utils';
+import { getCredentialsFromRequest, isDemoMode } from '@/lib/api-utils';
+import { setDemoBodyTemperature } from '@/lib/demo-data';
 
 export async function POST(
   request: NextRequest,
@@ -20,6 +21,12 @@ export async function POST(
     }
 
     const credentials = getCredentialsFromRequest(request);
+    
+    if (isDemoMode(credentials)) {
+      await setDemoBodyTemperature(bodyIndex, temp);
+      return NextResponse.json({ success: true, body: bodyIndex, temp, demo: true });
+    }
+    
     await setBodyTemperature(bodyIndex, temp, credentials);
     return NextResponse.json({ success: true, body: bodyIndex, temp });
   } catch (error) {

@@ -92,7 +92,7 @@ export interface PoolStatus {
   bodies: PoolBody[];
   circuits: Circuit[];
   freezeMode: boolean;
-  connectionType: 'local' | 'remote';
+  connectionType: 'local' | 'remote' | 'demo';
   pumpIds?: number[]; // Available pump IDs from equipment config
   // Delay states (true when off-delay is active)
   poolDelay?: boolean;

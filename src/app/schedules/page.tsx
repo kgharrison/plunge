@@ -308,6 +308,7 @@ export default function SchedulesPage() {
         method: 'DELETE',
         headers: getAuthHeaders(credentials),
       });
+      
       closeScheduleEditor();
       fetchData();
     } catch (err) {

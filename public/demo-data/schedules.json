@@ -1,0 +1,49 @@
+{
+  "recurring": [
+    {
+      "scheduleId": 1,
+      "circuitId": 6,
+      "startTime": 540,
+      "stopTime": 1020,
+      "dayMask": 127,
+      "flags": 0,
+      "heatCmd": 4,
+      "heatSetPoint": 0,
+      "scheduleType": "recurring"
+    },
+    {
+      "scheduleId": 2,
+      "circuitId": 2,
+      "startTime": 600,
+      "stopTime": 660,
+      "dayMask": 127,
+      "flags": 0,
+      "heatCmd": 4,
+      "heatSetPoint": 70,
+      "scheduleType": "recurring"
+    },
+    {
+      "scheduleId": 3,
+      "circuitId": 8,
+      "startTime": 600,
+      "stopTime": 660,
+      "dayMask": 127,
+      "flags": 0,
+      "heatCmd": 4,
+      "heatSetPoint": 70,
+      "scheduleType": "recurring"
+    },
+    {
+      "scheduleId": 4,
+      "circuitId": 4,
+      "startTime": 1080,
+      "stopTime": 1365,
+      "dayMask": 127,
+      "flags": 0,
+      "heatCmd": 4,
+      "heatSetPoint": 70,
+      "scheduleType": "recurring"
+    }
+  ],
+  "runOnce": []
+}

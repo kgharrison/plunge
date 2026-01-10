@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { updateSchedule, deleteSchedule } from '@/lib/screenlogic';
-import { getCredentialsFromRequest } from '@/lib/api-utils';
+import { getCredentialsFromRequest, isDemoMode } from '@/lib/api-utils';
+import { updateDemoSchedule, deleteDemoSchedule } from '@/lib/demo-data';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +25,12 @@ export async function PUT(
     }
     
     const credentials = getCredentialsFromRequest(request);
+    
+    if (isDemoMode(credentials)) {
+      await updateDemoSchedule(scheduleId);
+      return NextResponse.json({ success: true, demo: true });
+    }
+    
     const body = await request.json();
     
     const {
@@ -84,6 +91,12 @@ export async function DELETE(
     }
     
     const credentials = getCredentialsFromRequest(request);
+    
+    if (isDemoMode(credentials)) {
+      await deleteDemoSchedule(scheduleId);
+      return NextResponse.json({ success: true, demo: true });
+    }
+    
     await deleteSchedule(scheduleId, credentials);
     
     return NextResponse.json({ success: true });

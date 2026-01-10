@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSchedules, createSchedule } from '@/lib/screenlogic';
-import { getCredentialsFromRequest } from '@/lib/api-utils';
+import { getCredentialsFromRequest, isDemoMode } from '@/lib/api-utils';
+import { getDemoSchedules, createDemoSchedule } from '@/lib/demo-data';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,6 +11,12 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: NextRequest) {
   try {
     const credentials = getCredentialsFromRequest(request);
+    
+    if (isDemoMode(credentials)) {
+      const schedules = await getDemoSchedules();
+      return NextResponse.json(schedules);
+    }
+    
     const schedules = await getSchedules(credentials);
     return NextResponse.json(schedules);
   } catch (error) {
@@ -28,6 +35,12 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const credentials = getCredentialsFromRequest(request);
+    
+    if (isDemoMode(credentials)) {
+      const scheduleId = await createDemoSchedule();
+      return NextResponse.json({ scheduleId, success: true, demo: true });
+    }
+    
     const body = await request.json();
     
     const {

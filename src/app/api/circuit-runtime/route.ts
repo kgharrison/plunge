@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { setCircuitRuntime } from '@/lib/screenlogic';
-import { getCredentialsFromRequest } from '@/lib/api-utils';
+import { getCredentialsFromRequest, isDemoMode } from '@/lib/api-utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +24,10 @@ export async function POST(request: NextRequest) {
         { error: 'Invalid runtime', message: 'minutes must be between 1 and 1440 (24 hours)' },
         { status: 400 }
       );
+    }
+
+    if (isDemoMode(credentials)) {
+      return NextResponse.json({ success: true, circuitId, minutes, demo: true });
     }
 
     await setCircuitRuntime(circuitId, minutes, credentials);

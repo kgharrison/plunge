@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSystemTime, setSystemTime } from '@/lib/screenlogic';
-import { getCredentialsFromRequest } from '@/lib/api-utils';
+import { getCredentialsFromRequest, isDemoMode } from '@/lib/api-utils';
+import { getDemoSystemTime } from '@/lib/demo-data';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,6 +11,15 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: NextRequest) {
   try {
     const credentials = getCredentialsFromRequest(request);
+    
+    if (isDemoMode(credentials)) {
+      const systemTime = await getDemoSystemTime();
+      return NextResponse.json({
+        date: systemTime.date.toISOString(),
+        adjustForDST: systemTime.adjustForDST,
+      });
+    }
+    
     const systemTime = await getSystemTime(credentials);
     
     return NextResponse.json({

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCircuitDefinitions, getCustomNames, setCustomName } from '@/lib/screenlogic';
-import { getCredentialsFromRequest } from '@/lib/api-utils';
+import { getCredentialsFromRequest, isDemoMode } from '@/lib/api-utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,6 +11,11 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: NextRequest) {
   try {
     const credentials = getCredentialsFromRequest(request);
+    
+    // Demo mode - return empty arrays (circuit names not critical for demo)
+    if (isDemoMode(credentials)) {
+      return NextResponse.json({ builtIn: [], custom: [] });
+    }
     
     const [builtIn, custom] = await Promise.all([
       getCircuitDefinitions(credentials),
@@ -34,6 +39,11 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const credentials = getCredentialsFromRequest(request);
+    
+    if (isDemoMode(credentials)) {
+      return NextResponse.json({ success: true, demo: true });
+    }
+    
     const body = await request.json();
     
     const { index, name } = body;

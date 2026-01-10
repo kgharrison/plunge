@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sendLightCommand } from '@/lib/screenlogic';
-import { getCredentialsFromRequest } from '@/lib/api-utils';
+import { getCredentialsFromRequest, isDemoMode } from '@/lib/api-utils';
+import { sendDemoLightCommand } from '@/lib/demo-data';
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,6 +16,12 @@ export async function POST(request: NextRequest) {
     }
 
     const credentials = getCredentialsFromRequest(request);
+    
+    if (isDemoMode(credentials)) {
+      await sendDemoLightCommand(command);
+      return NextResponse.json({ success: true, command, demo: true });
+    }
+    
     await sendLightCommand(command, credentials);
     return NextResponse.json({ success: true, command });
   } catch (error) {

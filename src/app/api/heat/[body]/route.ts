@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { setHeatMode } from '@/lib/screenlogic';
-import { getCredentialsFromRequest } from '@/lib/api-utils';
+import { getCredentialsFromRequest, isDemoMode } from '@/lib/api-utils';
+import { setDemoHeatMode } from '@/lib/demo-data';
 
 export async function POST(
   request: NextRequest,
@@ -20,6 +21,12 @@ export async function POST(
     }
 
     const credentials = getCredentialsFromRequest(request);
+    
+    if (isDemoMode(credentials)) {
+      await setDemoHeatMode(bodyIndex, mode);
+      return NextResponse.json({ success: true, body: bodyIndex, mode, demo: true });
+    }
+    
     await setHeatMode(bodyIndex, mode, credentials);
     return NextResponse.json({ success: true, body: bodyIndex, mode });
   } catch (error) {

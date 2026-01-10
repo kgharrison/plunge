@@ -1,12 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCredentialsFromRequest } from '@/lib/api-utils';
+import { getCredentialsFromRequest, isDemoMode } from '@/lib/api-utils';
 import { getSystemTime } from '@/lib/screenlogic';
+import { getDemoSystemTime } from '@/lib/demo-data';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
     const credentials = getCredentialsFromRequest(request);
+    
+    // Demo mode - return current time
+    if (isDemoMode(credentials)) {
+      const demoTime = await getDemoSystemTime();
+      const serverNow = new Date();
+      return NextResponse.json({
+        controllerTime: demoTime.date.toISOString(),
+        serverTime: serverNow.toISOString(),
+        offsetHours: 0,
+        adjustForDST: demoTime.adjustForDST,
+      });
+    }
+    
     const systemTime = await getSystemTime(credentials);
     
     // The controller returns its current local time

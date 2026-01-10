@@ -1,0 +1,287 @@
+{
+  "controller": {
+    "controllerType": 1,
+    "controllerData": 0,
+    "degC": false,
+    "equipment": {
+      "POOL_SOLARPRESENT": true,
+      "POOL_SOLARHEATPUMP": false,
+      "POOL_CHLORPRESENT": false,
+      "POOL_IBRITEPRESENT": true,
+      "POOL_IFLOWPRESENT0": true,
+      "POOL_IFLOWPRESENT1": false,
+      "POOL_IFLOWPRESENT2": false,
+      "POOL_IFLOWPRESENT3": false,
+      "POOL_IFLOWPRESENT4": false,
+      "POOL_IFLOWPRESENT5": false,
+      "POOL_IFLOWPRESENT6": false,
+      "POOL_IFLOWPRESENT7": false,
+      "POOL_NO_SPECIAL_LIGHTS": false,
+      "POOL_HEATPUMPHASCOOL": false,
+      "POOL_MAGICSTREAMPRESENT": false,
+      "POOL_ICHEMPRESENT": false
+    },
+    "circuitCount": 8,
+    "colorCount": 8,
+    "minSetPoint": [
+      40,
+      40
+    ],
+    "maxSetPoint": [
+      104,
+      104
+    ],
+    "circuitArray": [
+      {
+        "circuitId": 1,
+        "name": "Spa",
+        "function": 1,
+        "interface": 1,
+        "freeze": false,
+        "colorSet": 0,
+        "colorPos": 0,
+        "colorStagger": 0,
+        "eggTimer": 180
+      },
+      {
+        "circuitId": 2,
+        "name": "Polaris",
+        "function": 5,
+        "interface": 2,
+        "freeze": false,
+        "colorSet": 0,
+        "colorPos": 0,
+        "colorStagger": 0,
+        "eggTimer": 180
+      },
+      {
+        "circuitId": 3,
+        "name": "Jets",
+        "function": 0,
+        "interface": 2,
+        "freeze": false,
+        "colorSet": 0,
+        "colorPos": 0,
+        "colorStagger": 0,
+        "eggTimer": 180
+      },
+      {
+        "circuitId": 4,
+        "name": "Lights",
+        "function": 16,
+        "interface": 3,
+        "freeze": false,
+        "colorSet": 4,
+        "colorPos": 0,
+        "colorStagger": 0,
+        "eggTimer": 120
+      },
+      {
+        "circuitId": 5,
+        "name": "Waterfall Light",
+        "function": 16,
+        "interface": 3,
+        "freeze": false,
+        "colorSet": 4,
+        "colorPos": 1,
+        "colorStagger": 0,
+        "eggTimer": 180
+      },
+      {
+        "circuitId": 6,
+        "name": "Pool",
+        "function": 2,
+        "interface": 0,
+        "freeze": 1,
+        "colorSet": 0,
+        "colorPos": 0,
+        "colorStagger": 0,
+        "eggTimer": 180
+      },
+      {
+        "circuitId": 7,
+        "name": "Waterfall",
+        "function": 0,
+        "interface": 2,
+        "freeze": false,
+        "colorSet": 0,
+        "colorPos": 0,
+        "colorStagger": 0,
+        "eggTimer": 180
+      },
+      {
+        "circuitId": 8,
+        "name": "High Speed",
+        "function": 0,
+        "interface": 2,
+        "freeze": false,
+        "colorSet": 0,
+        "colorPos": 0,
+        "colorStagger": 0,
+        "eggTimer": 480
+      }
+    ],
+    "colorArray": [
+      {
+        "name": "White",
+        "color": {
+          "r": 255,
+          "g": 255,
+          "b": 255
+        }
+      },
+      {
+        "name": "Light Green",
+        "color": {
+          "r": 160,
+          "g": 255,
+          "b": 160
+        }
+      },
+      {
+        "name": "Green",
+        "color": {
+          "r": 0,
+          "g": 255,
+          "b": 80
+        }
+      },
+      {
+        "name": "Cyan",
+        "color": {
+          "r": 0,
+          "g": 255,
+          "b": 200
+        }
+      },
+      {
+        "name": "Blue",
+        "color": {
+          "r": 100,
+          "g": 140,
+          "b": 255
+        }
+      },
+      {
+        "name": "Lavender",
+        "color": {
+          "r": 230,
+          "g": 130,
+          "b": 255
+        }
+      },
+      {
+        "name": "Magenta",
+        "color": {
+          "r": 255,
+          "g": 0,
+          "b": 128
+        }
+      },
+      {
+        "name": "Light Magenta",
+        "color": {
+          "r": 255,
+          "g": 180,
+          "b": 210
+        }
+      }
+    ],
+    "bodyArray": []
+  },
+  "equipment": {
+    "controllerType": 1,
+    "hardwareType": 0,
+    "expansionCount": 0,
+    "version": 1160,
+    "heaterConfig": {
+      "body1SolarPresent": true,
+      "solarHeatPumpPresent": false,
+      "body2SolarPresent": false,
+      "thermaFloPresent": false,
+      "thermaFloCoolPresent": false,
+      "units": 0
+    },
+    "valveCount": 0,
+    "valves": [
+      {
+        "loadCenterIndex": 0,
+        "valveIndex": 1,
+        "valveName": "A",
+        "loadCenterName": "1",
+        "deviceId": 0
+      },
+      {
+        "loadCenterIndex": 0,
+        "valveIndex": 2,
+        "valveName": "B",
+        "deviceId": 41
+      }
+    ],
+    "highSpeedCircuits": [
+      1
+    ],
+    "pumps": [
+      {
+        "id": 1,
+        "type": 128,
+        "pentairType": 3,
+        "name": "Intelliflo VS",
+        "address": 95,
+        "circuits": [
+          {
+            "id": 1,
+            "circuit": 6,
+            "speed": 1000,
+            "units": 0
+          },
+          {
+            "id": 2,
+            "circuit": 2,
+            "speed": 2000,
+            "units": 0
+          },
+          {
+            "id": 3,
+            "circuit": 158,
+            "speed": 2850,
+            "units": 0
+          },
+          {
+            "id": 4,
+            "circuit": 1,
+            "speed": 3000,
+            "units": 0
+          },
+          {
+            "id": 5,
+            "circuit": 157,
+            "speed": 2600,
+            "units": 0
+          },
+          {
+            "id": 6,
+            "circuit": 159,
+            "speed": 2750,
+            "units": 0
+          },
+          {
+            "id": 7,
+            "circuit": 8,
+            "speed": 2850,
+            "units": 0
+          }
+        ],
+        "primingSpeed": 2300,
+        "primingTime": 1,
+        "minSpeed": 450,
+        "maxSpeed": 3450,
+        "speedStepSize": 10,
+        "isRunning": true,
+        "watts": 0,
+        "rpm": 0,
+        "gpm": 0
+      }
+    ]
+  }
+}

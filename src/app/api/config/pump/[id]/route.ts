@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPumpStatus, setPumpCircuitSpeed } from '@/lib/screenlogic';
-import { getCredentialsFromRequest } from '@/lib/api-utils';
+import { getCredentialsFromRequest, isDemoMode } from '@/lib/api-utils';
+import { getDemoPumpStatus } from '@/lib/demo-data';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,6 +24,18 @@ export async function GET(
     }
     
     const credentials = getCredentialsFromRequest(request);
+    
+    if (isDemoMode(credentials)) {
+      const pump = await getDemoPumpStatus(pumpId);
+      if (!pump) {
+        return NextResponse.json(
+          { error: 'Pump not found' },
+          { status: 404 }
+        );
+      }
+      return NextResponse.json(pump);
+    }
+    
     const pump = await getPumpStatus(pumpId, credentials);
     
     if (!pump) {

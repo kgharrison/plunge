@@ -1,0 +1,79 @@
+{
+  "connected": true,
+  "lastUpdated": "2026-01-10T23:05:32.737Z",
+  "airTemp": 60,
+  "bodies": [
+    {
+      "name": "Pool",
+      "currentTemp": 52,
+      "setPoint": 90,
+      "heatMode": 0,
+      "heatStatus": false
+    },
+    {
+      "name": "Spa",
+      "currentTemp": 52,
+      "setPoint": 100,
+      "heatMode": 0,
+      "heatStatus": false
+    }
+  ],
+  "circuits": [
+    {
+      "id": 1,
+      "name": "Circuit 1",
+      "state": false,
+      "circuitFunction": 0
+    },
+    {
+      "id": 2,
+      "name": "Circuit 2",
+      "state": false,
+      "circuitFunction": 0
+    },
+    {
+      "id": 3,
+      "name": "Circuit 3",
+      "state": false,
+      "circuitFunction": 0
+    },
+    {
+      "id": 4,
+      "name": "Circuit 4",
+      "state": false,
+      "circuitFunction": 0
+    },
+    {
+      "id": 5,
+      "name": "Circuit 5",
+      "state": false,
+      "circuitFunction": 0
+    },
+    {
+      "id": 6,
+      "name": "Circuit 6",
+      "state": 1,
+      "circuitFunction": 0
+    },
+    {
+      "id": 7,
+      "name": "Circuit 7",
+      "state": false,
+      "circuitFunction": 0
+    },
+    {
+      "id": 8,
+      "name": "Circuit 8",
+      "state": false,
+      "circuitFunction": 0
+    }
+  ],
+  "freezeMode": false,
+  "connectionType": "demo",
+  "pumpIds": [
+    1
+  ],
+  "poolDelay": false,
+  "spaDelay": false,
+  "cleanerDelay": false
+}
