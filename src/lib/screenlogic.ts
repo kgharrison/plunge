@@ -124,7 +124,7 @@ export function getHeatModeValue(name: string): number {
 // Cache for connection info to avoid repeated discovery
 let cachedConnectionInfo: ConnectionInfo | null = null;
 let cacheExpiry = 0;
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL = 15 * 60 * 1000; // 15 minutes
 
 // Clear cache on module load to ensure fresh discovery
 cachedConnectionInfo = null;
@@ -157,7 +157,7 @@ export function getCredentials(requestCredentials?: Credentials): Credentials {
 /**
  * Discover local ScreenLogic units on the network
  */
-export async function discoverLocalUnits(timeoutMs = 3000): Promise<LocalUnit[]> {
+export async function discoverLocalUnits(timeoutMs = 5000): Promise<LocalUnit[]> {
   return new Promise((resolve) => {
     try {
       const finder = new ScreenLogic.FindUnits();
@@ -197,7 +197,7 @@ export async function getConnectionInfo(credentials: Credentials, skipLocalDisco
   // Skip local discovery if requested (faster remote connection)
   if (!skipLocalDiscovery) {
     // Try local discovery first - give it enough time to find local units
-    const localUnits = await discoverLocalUnits(3000);
+    const localUnits = await discoverLocalUnits(5000);
     
     if (localUnits.length > 0) {
       // Found local unit - use it
