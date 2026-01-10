@@ -659,8 +659,11 @@ export default function Home() {
         {/* Header */}
         <header className="flex justify-between items-start py-2 animate-fade-in">
           <div>
-            <h1 className="text-[32px] font-semibold tracking-tight leading-none mb-1">Plunge</h1>
-            <div className="flex items-center gap-2 text-[15px] text-white/55">
+            <div className="flex items-center gap-2 mb-1">
+              <img src="/logo-192.png" alt="Plunge" className="w-8 h-8 -ml-[5px]" />
+              <h1 className="text-[32px] font-semibold tracking-tight leading-none">Plunge</h1>
+            </div>
+            <div className="flex items-center gap-2 text-[15px] text-white/55 ml-[7px]">
               {loading && !status ? (
                 <span>{connectingPhase === 'local' ? 'Connecting locally...' : 'Connecting remotely...'}</span>
               ) : error && !status ? (
