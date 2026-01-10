@@ -739,27 +739,10 @@ export default function HistoryPage() {
       const cacheCoversView = cache.dataStart <= viewStart + tolerance && cache.dataEnd >= viewEnd - tolerance;
       
       if (cacheCoversView) {
-        console.log('[History] Cache hit:', {
-          range,
-          viewStart: new Date(viewStart).toISOString(),
-          viewEnd: new Date(viewEnd).toISOString(),
-          cacheStart: new Date(cache.dataStart).toISOString(),
-          cacheEnd: new Date(cache.dataEnd).toISOString(),
-        });
         setHistory(cache.data);
         setLoading(false);
         return;
       }
-      
-      console.log('[History] Cache miss - need more data:', {
-        range,
-        viewStart: new Date(viewStart).toISOString(),
-        viewEnd: new Date(viewEnd).toISOString(),
-        cacheStart: new Date(cache.dataStart).toISOString(),
-        cacheEnd: new Date(cache.dataEnd).toISOString(),
-        needEarlier: viewStart < cache.dataStart,
-        needLater: viewEnd > cache.dataEnd,
-      });
     }
     
     // Request extra buffer to account for controller timezone quirks
@@ -778,17 +761,6 @@ export default function HistoryPage() {
       }
       // If we need both directions, fetch the full range (already set above)
     }
-    
-    console.log('[History] Fetching:', {
-      range,
-      hours,
-      endDate: end.toISOString(),
-      viewStart: new Date(viewStart).toISOString(),
-      viewEnd: new Date(viewEnd).toISOString(),
-      fetchStart: new Date(fetchStart).toISOString(),
-      fetchEnd: new Date(fetchEnd).toISOString(),
-      forceRefresh,
-    });
     
     isFetchingRef.current = true;
     setLoading(true);
@@ -826,16 +798,9 @@ export default function HistoryPage() {
         data: mergedData,
       };
       
-      console.log('[History] Data received and cached:', {
-        airTemps: mergedData.airTemps.length,
-        poolTemps: mergedData.poolTemps.length,
-        cacheRange: `${new Date(dataStart).toISOString()} to ${new Date(dataEnd).toISOString()}`,
-      });
-      
       setHistory(mergedData);
       setError(null);
     } catch (err) {
-      console.error('[History] Error:', err);
       setError((err as Error).message);
     } finally {
       isFetchingRef.current = false;
@@ -893,6 +858,25 @@ export default function HistoryPage() {
     }
     setTimeRange(range);
     fetchHistory(range, endDate);
+  };
+
+  // Navigate backward/forward by the current time range
+  const navigateTime = (direction: 'back' | 'forward') => {
+    const rangeConfig = TIME_RANGES.find(r => r.value === timeRange);
+    const hours = rangeConfig?.hours || 24;
+    const deltaMs = hours * 60 * 60 * 1000;
+    
+    const newEndDate = new Date(endDate.getTime() + (direction === 'forward' ? deltaMs : -deltaMs));
+    
+    // Don't allow navigating into the future
+    const now = new Date();
+    if (newEndDate > now) {
+      setEndDate(now);
+      fetchHistory(timeRange, now);
+    } else {
+      setEndDate(newEndDate);
+      fetchHistory(timeRange, newEndDate);
+    }
   };
 
   // Drag handlers for time navigation
@@ -1037,32 +1021,55 @@ export default function HistoryPage() {
     <div className="min-h-screen bg-black text-white pb-24">
       {/* Header */}
       <header className="sticky top-0 z-10 bg-black/80 backdrop-blur-xl border-b border-white/10">
-        <div className="flex items-center justify-between px-5 py-4">
-          <Link href="/" className="flex items-center gap-2 text-white/60">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
-            <span className="text-[15px]">Back</span>
-          </Link>
+        <div className="flex items-center justify-center px-5 py-4">
           <h1 className="text-[17px] font-semibold">History</h1>
-          <div className="w-16" /> {/* Spacer for centering */}
         </div>
         
-        {/* Time Range Selector */}
-        <div className="flex justify-center gap-1 px-4 pb-2">
-          {TIME_RANGES.map(range => (
-            <button
-              key={range.value}
-              onClick={() => handleTimeRangeChange(range.value)}
-              className={`px-4 py-1.5 rounded-full text-[13px] font-medium transition-colors ${
-                timeRange === range.value
-                  ? 'bg-cyan-500 text-black'
-                  : 'bg-white/10 text-white/60'
-              }`}
-            >
-              {range.label}
-            </button>
-          ))}
+        {/* Time Range Selector with Navigation */}
+        <div className="flex items-center justify-center gap-3 px-4 pb-2">
+          {/* Back chevron */}
+          <button
+            onClick={() => navigateTime('back')}
+            className="p-2 rounded-full bg-white/10 text-white/60 hover:bg-white/15 hover:text-white/80 transition-colors active:scale-95"
+            aria-label={`Go back ${timeRange}`}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
+          
+          {/* Time range buttons */}
+          <div className="flex gap-1">
+            {TIME_RANGES.map(range => (
+              <button
+                key={range.value}
+                onClick={() => handleTimeRangeChange(range.value)}
+                className={`px-4 py-1.5 rounded-full text-[13px] font-medium transition-colors ${
+                  timeRange === range.value
+                    ? 'bg-cyan-500 text-black'
+                    : 'bg-white/10 text-white/60'
+                }`}
+              >
+                {range.label}
+              </button>
+            ))}
+          </div>
+          
+          {/* Forward chevron */}
+          <button
+            onClick={() => navigateTime('forward')}
+            disabled={isAtPresent}
+            className={`p-2 rounded-full transition-colors active:scale-95 ${
+              isAtPresent 
+                ? 'bg-white/5 text-white/20 cursor-not-allowed' 
+                : 'bg-white/10 text-white/60 hover:bg-white/15 hover:text-white/80'
+            }`}
+            aria-label={`Go forward ${timeRange}`}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4">
+              <path d="M9 18l6-6-6-6" />
+            </svg>
+          </button>
         </div>
         
         {/* Date Range Display */}
@@ -1304,7 +1311,6 @@ export default function HistoryPage() {
                   
                   return deduped
                     .sort((a, b) => new Date(b.run.on).getTime() - new Date(a.run.on).getTime())
-                    .slice(0, 5)
                     .map((item, i) => {
                       const duration = (new Date(item.run.off).getTime() - new Date(item.run.on).getTime()) / (1000 * 60);
                       
@@ -1329,6 +1335,26 @@ export default function HistoryPage() {
           </>
         )}
       </div>
+
+      {/* Bottom Nav */}
+      <nav className="bottom-nav">
+        <Link href="/" className="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          <span>Home</span>
+        </Link>
+        <Link href="/schedules" className="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <span>Schedules</span>
+        </Link>
+        <button className="nav-item active">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 3v18h18"/><path d="M7 16l4-4 4 4 5-6"/></svg>
+          <span>History</span>
+        </button>
+        <Link href="/settings" className="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <span>Settings</span>
+        </Link>
+      </nav>
     </div>
   );
 }

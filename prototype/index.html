@@ -1,0 +1,1896 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Plunge</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      /* Apple-style Liquid Glass colors */
+      --bg-base: #000000;
+      
+      /* Liquid Glass material */
+      --glass-bg: rgba(255, 255, 255, 0.08);
+      --glass-bg-hover: rgba(255, 255, 255, 0.12);
+      --glass-border: rgba(255, 255, 255, 0.18);
+      --glass-blur: 40px;
+      
+      /* Specular highlight */
+      --specular-light: linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.3) 0%,
+        rgba(255, 255, 255, 0.05) 50%,
+        rgba(255, 255, 255, 0) 100%
+      );
+      
+      /* Accent */
+      --tint-cyan: rgba(0, 210, 211, 0.6);
+      --tint-cyan-strong: #00d2d3;
+      --tint-orange: #ff9f0a;
+      --tint-blue: #0a84ff;
+      
+      /* Text - Apple style */
+      --text-primary: rgba(255, 255, 255, 0.92);
+      --text-secondary: rgba(255, 255, 255, 0.55);
+      --text-tertiary: rgba(255, 255, 255, 0.35);
+      
+      /* Typography - Google Sans Flex exclusively */
+      --font-display: 'Google Sans Flex', sans-serif;
+      --font-text: 'Google Sans Flex', sans-serif;
+      
+      /* Spacing */
+      --space-xs: 4px;
+      --space-sm: 8px;
+      --space-md: 16px;
+      --space-lg: 20px;
+      --space-xl: 28px;
+      
+      /* Motion */
+      --ease-out: cubic-bezier(0.25, 1, 0.5, 1);
+      --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      background: var(--bg-base);
+      font-family: var(--font-text);
+      color: var(--text-primary);
+      -webkit-font-smoothing: antialiased;
+      height: 100%;
+      overflow: hidden;
+    }
+    
+    body.sheet-open {
+      overflow: hidden;
+      position: fixed;
+      width: 100%;
+    }
+
+    /* Dynamic gradient background */
+    .bg-layer {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 0;
+      background: 
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 210, 211, 0.15) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 40% at 80% 60%, rgba(100, 100, 255, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse 50% 30% at 20% 80%, rgba(255, 100, 100, 0.05) 0%, transparent 50%),
+        var(--bg-base);
+    }
+
+    .container {
+      position: relative;
+      z-index: 1;
+      max-width: 430px;
+      margin: 0 auto;
+      padding: 8px 16px;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      padding-bottom: 80px; /* Space for bottom nav */
+    }
+
+    /* Bottom Navigation */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: space-around;
+      background: rgba(28, 28, 30, 0.9);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 8px 0;
+      padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+      z-index: 50;
+    }
+
+    .nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      background: none;
+      border: none;
+      padding: 6px 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .nav-item svg {
+      width: 24px;
+      height: 24px;
+      color: var(--text-tertiary);
+      transition: color 0.2s;
+    }
+
+    .nav-item span {
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--text-tertiary);
+      transition: color 0.2s;
+    }
+
+    .nav-item.active svg,
+    .nav-item.active span {
+      color: var(--tint-cyan-strong);
+    }
+
+    .nav-item:active {
+      transform: scale(0.95);
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 12px 0 16px;
+      animation: fadeIn 0.6s var(--ease-out);
+      flex-shrink: 0;
+    }
+
+    .header-left h1 {
+      font-family: var(--font-display);
+      font-size: 32px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      margin-bottom: 4px;
+    }
+
+    .header-subtitle {
+      font-size: 15px;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      background: #30d158;
+      border-radius: 50%;
+      box-shadow: 0 0 8px rgba(48, 209, 88, 0.6);
+    }
+
+    .air-temp {
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      text-align: right;
+    }
+
+    .air-temp-label {
+      font-size: 13px;
+      color: var(--text-tertiary);
+      margin-bottom: 2px;
+    }
+
+    /* Liquid Glass Card */
+    .liquid-glass {
+      position: relative;
+      background: var(--glass-bg);
+      backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+      border-radius: 22px;
+      border: 1px solid var(--glass-border);
+      overflow: hidden;
+      transition: transform 0.3s var(--ease-out), box-shadow 0.3s var(--ease-out);
+    }
+
+    .liquid-glass::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      border-radius: inherit;
+      background: var(--specular-light);
+      pointer-events: none;
+      opacity: 0.5;
+    }
+
+    .liquid-glass::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 10%;
+      right: 10%;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+      pointer-events: none;
+    }
+
+    .liquid-glass:active {
+      transform: scale(0.98);
+    }
+
+    .liquid-glass.tint-cyan {
+      background: linear-gradient(180deg, rgba(0, 210, 211, 0.12) 0%, rgba(0, 210, 211, 0.04) 100%), var(--glass-bg);
+      border-color: rgba(0, 210, 211, 0.25);
+      box-shadow: 0 0 0 1px rgba(0, 210, 211, 0.1) inset, 0 8px 32px rgba(0, 210, 211, 0.15);
+    }
+
+    .liquid-glass.tint-cyan::before {
+      background: linear-gradient(135deg, rgba(0, 210, 211, 0.2) 0%, transparent 60%);
+    }
+
+    /* Temperature Card */
+    .temp-card {
+      padding: 16px 18px;
+      margin-bottom: 12px;
+      animation: slideUp 0.5s var(--ease-out) backwards;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .temp-card:nth-child(2) { animation-delay: 0.1s; }
+    .temp-card:nth-child(3) { animation-delay: 0.15s; }
+
+    .temp-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .temp-card-title {
+      font-family: var(--font-display);
+      font-size: 17px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+
+    .heat-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: rgba(60, 50, 20, 0.9);
+      border-radius: 100px;
+      border: 1px solid rgba(255, 159, 10, 0.4);
+      font-size: 13px;
+      font-weight: 500;
+      color: #ff9f0a;
+    }
+
+    .heat-pill.off {
+      background: rgba(40, 40, 45, 0.9);
+      border-color: rgba(255, 255, 255, 0.15);
+      color: var(--text-tertiary);
+    }
+
+    .heat-pill.heater {
+      background: rgba(60, 25, 25, 0.9);
+      border-color: rgba(255, 69, 58, 0.4);
+      color: #ff453a;
+    }
+
+    .heat-pill svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    /* Temperature Display - Hero */
+    .temp-hero {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 6px 0;
+    }
+
+    .temp-ring-outer {
+      position: relative;
+      width: 165px;
+      height: 165px;
+    }
+
+    .temp-ring-svg {
+      width: 100%;
+      height: 100%;
+      transform: rotate(-90deg);
+    }
+
+    .temp-ring-track {
+      fill: none;
+      stroke: rgba(255, 255, 255, 0.08);
+      stroke-width: 6;
+    }
+
+    .temp-ring-fill {
+      fill: none;
+      stroke: url(#liquidGradient);
+      stroke-width: 6;
+      stroke-linecap: round;
+      stroke-dasharray: 502;
+      stroke-dashoffset: 502;
+      filter: drop-shadow(0 0 6px rgba(0, 210, 211, 0.5));
+      animation: ringDraw 1.2s var(--ease-out) 0.3s forwards;
+    }
+
+    .temp-ring-glow {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 120px;
+      height: 120px;
+      transform: translate(-50%, -50%);
+      background: radial-gradient(circle, rgba(0, 210, 211, 0.15) 0%, transparent 70%);
+      border-radius: 50%;
+      animation: pulseGlow 3s ease-in-out infinite;
+    }
+
+    .temp-value-container {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+    }
+
+    .temp-value {
+      font-family: var(--font-display);
+      font-size: 48px;
+      font-weight: 300;
+      letter-spacing: -0.03em;
+      line-height: 1;
+    }
+
+    .temp-value sup {
+      font-size: 22px;
+      font-weight: 400;
+      color: var(--text-secondary);
+      vertical-align: top;
+      margin-left: 2px;
+    }
+
+    .temp-setpoint {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-top: 6px;
+    }
+
+    .temp-setpoint strong {
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+
+    .tap-hint {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      margin-top: 6px;
+    }
+
+    /* Compact temp row */
+    .temp-compact {
+      padding: 14px 18px;
+    }
+
+    .temp-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .temp-row-left {
+      display: flex;
+      align-items: baseline;
+      gap: var(--space-md);
+    }
+
+    .temp-row-label {
+      font-family: var(--font-display);
+      font-size: 17px;
+      font-weight: 600;
+    }
+
+    .temp-row-value {
+      font-family: var(--font-display);
+      font-size: 32px;
+      font-weight: 300;
+      letter-spacing: -0.02em;
+    }
+
+    .temp-row-value sup {
+      font-size: 17px;
+      color: var(--text-secondary);
+    }
+
+    /* Section Header */
+    .section-header {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin: 16px 0 12px;
+      animation: fadeIn 0.5s var(--ease-out) 0.2s backwards;
+      flex-shrink: 0;
+    }
+
+    /* Circuit Grid */
+    .circuit-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      animation: slideUp 0.5s var(--ease-out) 0.25s backwards;
+      flex-shrink: 0;
+    }
+
+    .circuit-btn {
+      position: relative;
+      background: var(--glass-bg);
+      backdrop-filter: blur(20px) saturate(150%);
+      -webkit-backdrop-filter: blur(20px) saturate(150%);
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
+      padding: 16px 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: all 0.25s var(--ease-out);
+      overflow: hidden;
+    }
+
+    .circuit-btn::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: var(--specular-light);
+      opacity: 0.3;
+      pointer-events: none;
+    }
+
+    .circuit-btn::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 15%;
+      right: 15%;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+    }
+
+    .circuit-btn:active {
+      transform: scale(0.95);
+    }
+
+    .circuit-btn.active {
+      background: linear-gradient(180deg, rgba(0, 210, 211, 0.18) 0%, rgba(0, 210, 211, 0.08) 100%);
+      border-color: rgba(0, 210, 211, 0.35);
+      box-shadow: 0 0 0 1px rgba(0, 210, 211, 0.15) inset, 0 4px 20px rgba(0, 210, 211, 0.2);
+    }
+
+    .circuit-btn.active .circuit-icon {
+      color: var(--tint-cyan-strong);
+      filter: drop-shadow(0 0 8px rgba(0, 210, 211, 0.7));
+    }
+
+    .circuit-btn.active .circuit-label {
+      color: var(--text-primary);
+    }
+
+    .circuit-icon {
+      width: 28px;
+      height: 28px;
+      color: var(--text-tertiary);
+      transition: all 0.25s var(--ease-out);
+    }
+
+    .circuit-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      transition: color 0.25s var(--ease-out);
+    }
+
+    /* View All Link */
+    .view-all {
+      display: flex;
+      justify-content: center;
+      margin-top: 14px;
+      animation: fadeIn 0.5s var(--ease-out) 0.3s backwards;
+      flex-shrink: 0;
+    }
+
+    .view-all a {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--tint-cyan-strong);
+      text-decoration: none;
+      padding: 6px 12px;
+      border-radius: 10px;
+      transition: background 0.2s;
+    }
+
+    .view-all a:active {
+      background: rgba(0, 210, 211, 0.1);
+    }
+
+    /* ================================
+       MODAL / SHEET STYLES
+       ================================ */
+    
+    .modal-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      z-index: 100;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s var(--ease-out);
+    }
+
+    .modal-backdrop.open {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .modal-sheet {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(28, 28, 30, 0.95);
+      backdrop-filter: blur(40px) saturate(180%);
+      -webkit-backdrop-filter: blur(40px) saturate(180%);
+      border-radius: 20px 20px 0 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.15);
+      z-index: 101;
+      transform: translateY(100%);
+      transition: transform 0.4s var(--ease-out);
+      max-height: 85vh;
+      overflow-y: auto;
+      padding-bottom: env(safe-area-inset-bottom, 20px);
+    }
+
+    .modal-sheet.open {
+      transform: translateY(0);
+    }
+
+    .modal-sheet::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: var(--specular-light);
+      opacity: 0.3;
+      pointer-events: none;
+      border-radius: inherit;
+    }
+
+    .sheet-handle {
+      width: 36px;
+      height: 5px;
+      background: rgba(255, 255, 255, 0.3);
+      border-radius: 3px;
+      margin: 8px auto 0;
+    }
+
+    .sheet-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: var(--space-lg) var(--space-lg) var(--space-md);
+    }
+
+    .sheet-title {
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 600;
+    }
+
+    .sheet-close {
+      width: 30px;
+      height: 30px;
+      background: rgba(255, 255, 255, 0.1);
+      border: none;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: var(--text-secondary);
+      transition: all 0.2s;
+    }
+
+    .sheet-close:active {
+      transform: scale(0.9);
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    .sheet-close svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .sheet-content {
+      padding: 0 var(--space-lg) var(--space-xl);
+    }
+
+    /* Temperature Adjuster */
+    .temp-adjuster {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: var(--space-xl) 0;
+    }
+
+    .temp-display {
+      display: flex;
+      align-items: center;
+      gap: var(--space-xl);
+      margin-bottom: var(--space-xl);
+    }
+
+    .temp-btn {
+      width: 56px;
+      height: 56px;
+      background: var(--glass-bg);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--glass-border);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s var(--ease-out);
+      color: var(--text-primary);
+    }
+
+    .temp-btn:active {
+      transform: scale(0.92);
+      background: var(--glass-bg-hover);
+    }
+
+    .temp-btn svg {
+      width: 24px;
+      height: 24px;
+    }
+
+    .temp-big {
+      font-family: var(--font-display);
+      font-size: 72px;
+      font-weight: 300;
+      letter-spacing: -0.03em;
+      min-width: 140px;
+      text-align: center;
+    }
+
+    .temp-big sup {
+      font-size: 28px;
+      color: var(--text-secondary);
+      vertical-align: top;
+    }
+
+    .temp-range {
+      font-size: 14px;
+      color: var(--text-tertiary);
+      margin-top: var(--space-sm);
+    }
+
+    /* Heat Mode Selector */
+    .heat-mode-section {
+      margin-top: var(--space-xl);
+    }
+
+    .heat-mode-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: var(--space-md);
+    }
+
+    .heat-mode-selector {
+      display: flex;
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 12px;
+      padding: 4px;
+      gap: 4px;
+    }
+
+    .heat-mode-option {
+      flex: 1;
+      padding: 12px 16px;
+      background: transparent;
+      border: none;
+      border-radius: 10px;
+      font-family: var(--font-text);
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.25s var(--ease-out);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .heat-mode-option svg {
+      width: 18px;
+      height: 18px;
+      opacity: 0.6;
+      transition: opacity 0.25s;
+    }
+
+    .heat-mode-option:active {
+      transform: scale(0.96);
+    }
+
+    .heat-mode-option.active {
+      background: rgba(255, 255, 255, 0.12);
+      color: var(--text-primary);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .heat-mode-option.active svg {
+      opacity: 1;
+    }
+
+    .heat-mode-option.active.solar {
+      background: rgba(255, 159, 10, 0.2);
+      color: var(--tint-orange);
+    }
+
+    .heat-mode-option.active.heater {
+      background: rgba(255, 69, 58, 0.2);
+      color: #ff453a;
+    }
+
+    /* Current Status in Sheet */
+    .current-status {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: var(--space-md);
+      background: rgba(255, 255, 255, 0.04);
+      border-radius: 12px;
+      margin-bottom: var(--space-lg);
+    }
+
+    .current-status-label {
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+
+    .current-status-value {
+      font-family: var(--font-display);
+      font-size: 17px;
+      font-weight: 500;
+    }
+
+    /* ================================
+       ALL CIRCUITS SHEET STYLES
+       ================================ */
+
+    .circuits-full-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .circuit-full-btn {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 16px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      cursor: pointer;
+      transition: all 0.2s var(--ease-out);
+      text-align: left;
+    }
+
+    .circuit-full-btn:active {
+      transform: scale(0.98);
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .circuit-full-btn.active {
+      background: rgba(0, 210, 211, 0.1);
+      border-color: rgba(0, 210, 211, 0.25);
+    }
+
+    .circuit-full-icon {
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 10px;
+      flex-shrink: 0;
+    }
+
+    .circuit-full-icon svg {
+      width: 22px;
+      height: 22px;
+      color: var(--text-tertiary);
+      transition: color 0.2s;
+    }
+
+    .circuit-full-btn.active .circuit-full-icon {
+      background: rgba(0, 210, 211, 0.15);
+    }
+
+    .circuit-full-btn.active .circuit-full-icon svg {
+      color: var(--tint-cyan-strong);
+    }
+
+    .circuit-full-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .circuit-full-name {
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+
+    .circuit-full-status {
+      font-size: 13px;
+      color: var(--text-tertiary);
+    }
+
+    .circuit-full-btn.active .circuit-full-status {
+      color: var(--tint-cyan-strong);
+    }
+
+    .circuit-full-toggle {
+      width: 44px;
+      height: 26px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 13px;
+      position: relative;
+      flex-shrink: 0;
+      transition: background 0.2s;
+    }
+
+    .circuit-full-btn.active .circuit-full-toggle {
+      background: #30d158;
+    }
+
+    .toggle-indicator {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 22px;
+      height: 22px;
+      background: white;
+      border-radius: 50%;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+      transition: transform 0.2s var(--ease-out);
+    }
+
+    .circuit-full-btn.active .toggle-indicator {
+      transform: translateX(18px);
+    }
+
+    /* ================================
+       LIGHTS SHEET STYLES
+       ================================ */
+
+    .light-toggle-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: var(--space-md);
+      background: rgba(255, 255, 255, 0.04);
+      border-radius: 14px;
+      margin-bottom: var(--space-xl);
+    }
+
+    .light-toggle-info {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .light-toggle-label {
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+
+    .light-toggle-status {
+      font-size: 14px;
+      color: var(--text-tertiary);
+    }
+
+    .toggle-switch {
+      width: 51px;
+      height: 31px;
+      background: rgba(255, 255, 255, 0.15);
+      border: none;
+      border-radius: 16px;
+      position: relative;
+      cursor: pointer;
+      transition: background 0.3s var(--ease-out);
+    }
+
+    .toggle-switch.active {
+      background: #30d158;
+    }
+
+    .toggle-knob {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 27px;
+      height: 27px;
+      background: white;
+      border-radius: 50%;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+      transition: transform 0.3s var(--ease-out);
+    }
+
+    .toggle-switch.active .toggle-knob {
+      transform: translateX(20px);
+    }
+
+    /* Color Picker */
+    .color-picker-section {
+      margin-bottom: var(--space-xl);
+      transition: opacity 0.3s;
+    }
+
+    .color-picker-section.disabled {
+      opacity: 0.4;
+      pointer-events: none;
+    }
+
+    .color-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+
+    .color-swatch {
+      aspect-ratio: 1;
+      background: var(--swatch-color);
+      border: 3px solid transparent;
+      border-radius: 16px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      padding-bottom: 8px;
+      position: relative;
+      transition: all 0.2s var(--ease-out);
+      box-shadow: 
+        0 2px 8px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    }
+
+    .color-swatch::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      border-radius: inherit;
+      background: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.3) 0%,
+        transparent 50%
+      );
+      pointer-events: none;
+    }
+
+    .color-swatch:active {
+      transform: scale(0.94);
+    }
+
+    .color-swatch.active {
+      border-color: white;
+      box-shadow: 
+        0 0 0 2px rgba(255, 255, 255, 0.3),
+        0 4px 16px var(--swatch-color),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    }
+
+    .color-name {
+      font-size: 11px;
+      font-weight: 600;
+      color: rgba(0, 0, 0, 0.7);
+      text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+
+    /* Dark text for light colors */
+    .color-swatch[data-color="white"] .color-name,
+    .color-swatch[data-color="light-green"] .color-name,
+    .color-swatch[data-color="cyan"] .color-name,
+    .color-swatch[data-color="light-magenta"] .color-name {
+      color: rgba(0, 0, 0, 0.6);
+    }
+
+    /* Light text for dark colors */
+    .color-swatch[data-color="blue"] .color-name,
+    .color-swatch[data-color="green"] .color-name,
+    .color-swatch[data-color="magenta"] .color-name,
+    .color-swatch[data-color="lavender"] .color-name {
+      color: rgba(255, 255, 255, 0.9);
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    }
+
+    /* Light Modes */
+    .light-modes-section {
+      transition: opacity 0.3s;
+    }
+
+    .light-modes-section.disabled {
+      opacity: 0.4;
+      pointer-events: none;
+    }
+
+    .light-modes-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    .light-mode-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 14px;
+      padding: 16px 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: all 0.2s var(--ease-out);
+    }
+
+    .light-mode-btn:active {
+      transform: scale(0.95);
+    }
+
+    .light-mode-btn.active {
+      background: rgba(0, 210, 211, 0.15);
+      border-color: rgba(0, 210, 211, 0.3);
+    }
+
+    .mode-icon {
+      font-size: 24px;
+    }
+
+    .mode-name {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+
+    .light-mode-btn.active .mode-name {
+      color: var(--tint-cyan-strong);
+    }
+
+    /* Animations */
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes ringDraw {
+      to { stroke-dashoffset: 160; }
+    }
+
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.5; transform: translate(-50%, -50%) scale(1); }
+      50% { opacity: 0.8; transform: translate(-50%, -50%) scale(1.05); }
+    }
+
+    /* Noise overlay */
+    .noise-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      pointer-events: none;
+      z-index: 1000;
+      opacity: 0.015;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%' height='100%' filter='url(%23noise)'/%3E%3C/svg%3E");
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-layer"></div>
+  <div class="noise-overlay"></div>
+  
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <h1>Plunge</h1>
+        <div class="header-subtitle">
+          <span class="status-dot"></span>
+          <span>Connected</span>
+        </div>
+      </div>
+      <div class="air-temp">
+        <div class="air-temp-label">Outside</div>
+        72°
+      </div>
+    </header>
+
+    <!-- Pool Temperature - Primary -->
+    <div class="liquid-glass temp-card tint-cyan" onclick="openSheet('pool')">
+      <div class="temp-card-header">
+        <span class="temp-card-title">Pool</span>
+        <div class="heat-pill" id="pool-heat-pill">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <circle cx="12" cy="12" r="4"/>
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
+          </svg>
+          <span>Solar</span>
+        </div>
+      </div>
+      
+      <div class="temp-hero">
+        <div class="temp-ring-outer">
+          <div class="temp-ring-glow"></div>
+          <svg class="temp-ring-svg" viewBox="0 0 200 200">
+            <defs>
+              <linearGradient id="liquidGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#06b6d4"/>
+                <stop offset="50%" stop-color="#00d2d3"/>
+                <stop offset="100%" stop-color="#10b981"/>
+              </linearGradient>
+            </defs>
+            <circle class="temp-ring-track" cx="100" cy="100" r="80"/>
+            <circle class="temp-ring-fill" cx="100" cy="100" r="80"/>
+          </svg>
+          <div class="temp-value-container">
+            <div class="temp-value" id="pool-temp-display">84<sup>°</sup></div>
+            <div class="temp-setpoint">Set to <strong id="pool-setpoint-display">86°</strong></div>
+          </div>
+        </div>
+      </div>
+      <div class="tap-hint">Tap to adjust</div>
+    </div>
+
+    <!-- Spa Temperature - Compact -->
+    <div class="liquid-glass temp-card temp-compact" onclick="openSheet('spa')">
+      <div class="temp-row">
+        <div class="temp-row-left">
+          <span class="temp-row-label">Spa</span>
+          <span class="temp-row-value" id="spa-temp-display">72<sup>°</sup></span>
+        </div>
+        <div class="heat-pill off" id="spa-heat-pill">
+          <span>Off</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <h2 class="section-header">Quick Actions</h2>
+    <div class="circuit-grid">
+      <button class="circuit-btn active" onclick="event.stopPropagation(); this.classList.toggle('active')">
+        <svg class="circuit-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="8"/>
+          <path d="M12 8v8M8 12h8"/>
+        </svg>
+        <span class="circuit-label">Pool</span>
+      </button>
+      
+      <button class="circuit-btn" onclick="event.stopPropagation(); this.classList.toggle('active')">
+        <svg class="circuit-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <ellipse cx="12" cy="16" rx="8" ry="4"/>
+          <path d="M6 16c0-2 2-6 6-6s6 4 6 6"/>
+          <circle cx="8" cy="9" r="1.5" fill="currentColor"/>
+          <circle cx="12" cy="6" r="1.5" fill="currentColor"/>
+          <circle cx="16" cy="9" r="1.5" fill="currentColor"/>
+        </svg>
+        <span class="circuit-label">Spa</span>
+      </button>
+      
+      <button class="circuit-btn" id="lightsBtn" onclick="event.stopPropagation(); openLightsSheet()">
+        <svg class="circuit-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <path d="M9 18h6M10 22h4"/>
+          <path d="M12 2v2"/>
+          <path d="M12 8c-2.2 0-4 1.8-4 4v4h8v-4c0-2.2-1.8-4-4-4z"/>
+          <path d="M4 12h2M18 12h2M6.34 6.34l1.42 1.42M16.24 6.34l-1.42 1.42"/>
+        </svg>
+        <span class="circuit-label">Lights</span>
+      </button>
+    </div>
+
+    <!-- View All -->
+    <div class="view-all">
+      <a href="#" onclick="event.preventDefault(); openCircuitsSheet()">View All Circuits →</a>
+    </div>
+  </div>
+
+  <!-- Bottom Navigation -->
+  <nav class="bottom-nav">
+    <button class="nav-item active" onclick="switchTab(this, 'home')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+        <polyline points="9 22 9 12 15 12 15 22"/>
+      </svg>
+      <span>Home</span>
+    </button>
+    <button class="nav-item" onclick="switchTab(this, 'features')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="3" y="3" width="7" height="7" rx="1"/>
+        <rect x="14" y="3" width="7" height="7" rx="1"/>
+        <rect x="3" y="14" width="7" height="7" rx="1"/>
+        <rect x="14" y="14" width="7" height="7" rx="1"/>
+      </svg>
+      <span>Features</span>
+    </button>
+    <button class="nav-item" onclick="switchTab(this, 'schedules')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <circle cx="12" cy="12" r="10"/>
+        <polyline points="12 6 12 12 16 14"/>
+      </svg>
+      <span>Schedules</span>
+    </button>
+    <button class="nav-item" onclick="switchTab(this, 'history')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M3 3v18h18"/>
+        <path d="M7 16l4-4 4 4 5-6"/>
+      </svg>
+      <span>History</span>
+    </button>
+    <button class="nav-item" onclick="switchTab(this, 'settings')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+      <span>Settings</span>
+    </button>
+  </nav>
+
+  <!-- Modal Backdrop -->
+  <div class="modal-backdrop" id="modalBackdrop" onclick="closeSheet()"></div>
+
+  <!-- Temperature Control Sheet -->
+  <div class="modal-sheet" id="tempSheet" data-sheet="temp">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <span class="sheet-title" id="sheetTitle">Pool</span>
+      <button class="sheet-close" onclick="closeSheet()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <path d="M18 6L6 18M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    
+    <div class="sheet-content">
+      <!-- Current Temperature -->
+      <div class="current-status">
+        <span class="current-status-label">Current Temperature</span>
+        <span class="current-status-value" id="currentTempValue">84°</span>
+      </div>
+
+      <!-- Temperature Adjuster -->
+      <div class="temp-adjuster">
+        <div class="temp-display">
+          <button class="temp-btn" onclick="adjustTemp(-1)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M5 12h14"/>
+            </svg>
+          </button>
+          <div class="temp-big" id="setpointValue">86<sup>°</sup></div>
+          <button class="temp-btn" onclick="adjustTemp(1)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M12 5v14M5 12h14"/>
+            </svg>
+          </button>
+        </div>
+        <div class="temp-range">Range: 40° – 104°F</div>
+      </div>
+
+      <!-- Heat Mode Selector -->
+      <div class="heat-mode-section">
+        <div class="heat-mode-label">Heat Mode</div>
+        <div class="heat-mode-selector">
+          <button class="heat-mode-option" data-mode="off" onclick="setHeatMode(this)">
+            Off
+          </button>
+          <button class="heat-mode-option solar active" data-mode="solar" onclick="setHeatMode(this)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <circle cx="12" cy="12" r="4"/>
+              <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
+            </svg>
+            Solar
+          </button>
+          <button class="heat-mode-option heater" data-mode="heater" onclick="setHeatMode(this)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M12 2c0 4-4 6-4 10a4 4 0 0 0 8 0c0-4-4-6-4-10z"/>
+              <path d="M12 12v4"/>
+            </svg>
+            Heater
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- All Circuits Sheet -->
+  <div class="modal-sheet" id="circuitsSheet" data-sheet="circuits">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <span class="sheet-title">All Circuits</span>
+      <button class="sheet-close" onclick="closeSheet()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <path d="M18 6L6 18M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    
+    <div class="sheet-content">
+      <div class="circuits-full-grid">
+        <!-- Circuit 6: Pool -->
+        <button class="circuit-full-btn active" data-circuit="6" onclick="toggleCircuit(this)">
+          <div class="circuit-full-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+              <circle cx="12" cy="12" r="8"/>
+              <path d="M12 8v8M8 12h8"/>
+            </svg>
+          </div>
+          <div class="circuit-full-info">
+            <span class="circuit-full-name">Pool</span>
+            <span class="circuit-full-status">1000 RPM</span>
+          </div>
+          <div class="circuit-full-toggle">
+            <span class="toggle-indicator"></span>
+          </div>
+        </button>
+
+        <!-- Circuit 1: Spa -->
+        <button class="circuit-full-btn" data-circuit="1" onclick="toggleCircuit(this)">
+          <div class="circuit-full-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+              <ellipse cx="12" cy="16" rx="8" ry="4"/>
+              <path d="M6 16c0-2 2-6 6-6s6 4 6 6"/>
+              <circle cx="8" cy="9" r="1.5" fill="currentColor"/>
+              <circle cx="12" cy="6" r="1.5" fill="currentColor"/>
+              <circle cx="16" cy="9" r="1.5" fill="currentColor"/>
+            </svg>
+          </div>
+          <div class="circuit-full-info">
+            <span class="circuit-full-name">Spa</span>
+            <span class="circuit-full-status">Off</span>
+          </div>
+          <div class="circuit-full-toggle">
+            <span class="toggle-indicator"></span>
+          </div>
+        </button>
+
+        <!-- Circuit 2: Polaris -->
+        <button class="circuit-full-btn" data-circuit="2" onclick="toggleCircuit(this)">
+          <div class="circuit-full-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+              <circle cx="12" cy="12" r="8"/>
+              <path d="M12 8v8"/>
+              <path d="M8 12l8 0"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </div>
+          <div class="circuit-full-info">
+            <span class="circuit-full-name">Polaris</span>
+            <span class="circuit-full-status">Off</span>
+          </div>
+          <div class="circuit-full-toggle">
+            <span class="toggle-indicator"></span>
+          </div>
+        </button>
+
+        <!-- Circuit 3: Jets -->
+        <button class="circuit-full-btn" data-circuit="3" onclick="toggleCircuit(this)">
+          <div class="circuit-full-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+              <path d="M4 12h4M8 12c0-2 2-4 4-4s4 2 4 4-2 4-4 4"/>
+              <path d="M16 12h4"/>
+              <path d="M6 8l2 4-2 4"/>
+              <path d="M18 8l-2 4 2 4"/>
+            </svg>
+          </div>
+          <div class="circuit-full-info">
+            <span class="circuit-full-name">Jets</span>
+            <span class="circuit-full-status">Off</span>
+          </div>
+          <div class="circuit-full-toggle">
+            <span class="toggle-indicator"></span>
+          </div>
+        </button>
+
+        <!-- Circuit 4: Lights -->
+        <button class="circuit-full-btn" data-circuit="4" onclick="toggleCircuit(this)">
+          <div class="circuit-full-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+              <path d="M9 18h6M10 22h4"/>
+              <path d="M12 2v2"/>
+              <path d="M12 8c-2.2 0-4 1.8-4 4v4h8v-4c0-2.2-1.8-4-4-4z"/>
+              <path d="M4 12h2M18 12h2M6.34 6.34l1.42 1.42M16.24 6.34l-1.42 1.42"/>
+            </svg>
+          </div>
+          <div class="circuit-full-info">
+            <span class="circuit-full-name">Lights</span>
+            <span class="circuit-full-status">Off</span>
+          </div>
+          <div class="circuit-full-toggle">
+            <span class="toggle-indicator"></span>
+          </div>
+        </button>
+
+        <!-- Circuit 5: Waterfall Light -->
+        <button class="circuit-full-btn" data-circuit="5" onclick="toggleCircuit(this)">
+          <div class="circuit-full-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+              <path d="M12 3v3M12 18v3"/>
+              <path d="M8 6v4c0 2 4 2 4 4v4"/>
+              <path d="M16 6v4c0 2-4 2-4 4"/>
+              <circle cx="12" cy="12" r="2"/>
+            </svg>
+          </div>
+          <div class="circuit-full-info">
+            <span class="circuit-full-name">Waterfall Light</span>
+            <span class="circuit-full-status">Off</span>
+          </div>
+          <div class="circuit-full-toggle">
+            <span class="toggle-indicator"></span>
+          </div>
+        </button>
+
+        <!-- Circuit 7: Waterfall -->
+        <button class="circuit-full-btn" data-circuit="7" onclick="toggleCircuit(this)">
+          <div class="circuit-full-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+              <path d="M6 4v6c0 3 2 5 6 6"/>
+              <path d="M18 4v6c0 3-2 5-6 6"/>
+              <path d="M12 16v5"/>
+              <path d="M8 20c0-2 4-2 4-4"/>
+              <path d="M16 20c0-2-4-2-4-4"/>
+            </svg>
+          </div>
+          <div class="circuit-full-info">
+            <span class="circuit-full-name">Waterfall</span>
+            <span class="circuit-full-status">Off</span>
+          </div>
+          <div class="circuit-full-toggle">
+            <span class="toggle-indicator"></span>
+          </div>
+        </button>
+
+        <!-- Circuit 8: High Speed -->
+        <button class="circuit-full-btn" data-circuit="8" onclick="toggleCircuit(this)">
+          <div class="circuit-full-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+              <circle cx="12" cy="12" r="8"/>
+              <path d="M12 8v4l3 3"/>
+              <path d="M12 6v1M18 12h-1M12 18v-1M6 12h1"/>
+            </svg>
+          </div>
+          <div class="circuit-full-info">
+            <span class="circuit-full-name">High Speed</span>
+            <span class="circuit-full-status">Off</span>
+          </div>
+          <div class="circuit-full-toggle">
+            <span class="toggle-indicator"></span>
+          </div>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lights Control Sheet -->
+  <div class="modal-sheet" id="lightsSheet" data-sheet="lights">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <span class="sheet-title">Lights</span>
+      <button class="sheet-close" onclick="closeSheet()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <path d="M18 6L6 18M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    
+    <div class="sheet-content">
+      <!-- Light Toggle -->
+      <div class="light-toggle-row">
+        <div class="light-toggle-info">
+          <span class="light-toggle-label">Pool & Waterfall Lights</span>
+          <span class="light-toggle-status" id="lightStatusText">Off</span>
+        </div>
+        <button class="toggle-switch" id="lightToggle" onclick="toggleLights()">
+          <span class="toggle-knob"></span>
+        </button>
+      </div>
+
+      <!-- Color Picker -->
+      <div class="color-picker-section disabled" id="colorPickerSection">
+        <div class="heat-mode-label">Color</div>
+        <div class="color-grid">
+          <button class="color-swatch" data-color="white" style="--swatch-color: rgb(255, 255, 255)" onclick="selectColor(this)">
+            <span class="color-name">White</span>
+          </button>
+          <button class="color-swatch" data-color="light-green" style="--swatch-color: rgb(160, 255, 160)" onclick="selectColor(this)">
+            <span class="color-name">Lt Green</span>
+          </button>
+          <button class="color-swatch" data-color="green" style="--swatch-color: rgb(0, 255, 80)" onclick="selectColor(this)">
+            <span class="color-name">Green</span>
+          </button>
+          <button class="color-swatch" data-color="cyan" style="--swatch-color: rgb(0, 255, 200)" onclick="selectColor(this)">
+            <span class="color-name">Cyan</span>
+          </button>
+          <button class="color-swatch active" data-color="blue" style="--swatch-color: rgb(100, 140, 255)" onclick="selectColor(this)">
+            <span class="color-name">Blue</span>
+          </button>
+          <button class="color-swatch" data-color="lavender" style="--swatch-color: rgb(230, 130, 255)" onclick="selectColor(this)">
+            <span class="color-name">Lavender</span>
+          </button>
+          <button class="color-swatch" data-color="magenta" style="--swatch-color: rgb(255, 0, 128)" onclick="selectColor(this)">
+            <span class="color-name">Magenta</span>
+          </button>
+          <button class="color-swatch" data-color="light-magenta" style="--swatch-color: rgb(255, 180, 210)" onclick="selectColor(this)">
+            <span class="color-name">Lt Magenta</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Light Modes -->
+      <div class="light-modes-section disabled" id="lightModesSection">
+        <div class="heat-mode-label">Light Shows</div>
+        <div class="light-modes-grid">
+          <button class="light-mode-btn" onclick="selectLightMode(this)" data-mode="sam">
+            <span class="mode-icon">🌈</span>
+            <span class="mode-name">SAM</span>
+          </button>
+          <button class="light-mode-btn" onclick="selectLightMode(this)" data-mode="party">
+            <span class="mode-icon">🎉</span>
+            <span class="mode-name">Party</span>
+          </button>
+          <button class="light-mode-btn" onclick="selectLightMode(this)" data-mode="romance">
+            <span class="mode-icon">💕</span>
+            <span class="mode-name">Romance</span>
+          </button>
+          <button class="light-mode-btn" onclick="selectLightMode(this)" data-mode="caribbean">
+            <span class="mode-icon">🏝️</span>
+            <span class="mode-name">Caribbean</span>
+          </button>
+          <button class="light-mode-btn" onclick="selectLightMode(this)" data-mode="american">
+            <span class="mode-icon">🇺🇸</span>
+            <span class="mode-name">American</span>
+          </button>
+          <button class="light-mode-btn" onclick="selectLightMode(this)" data-mode="sunset">
+            <span class="mode-icon">🌅</span>
+            <span class="mode-name">Sunset</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // State
+    let currentBody = 'pool';
+    let temps = {
+      pool: { current: 84, setpoint: 86, mode: 'solar' },
+      spa: { current: 72, setpoint: 100, mode: 'off' }
+    };
+
+    // Drag-to-dismiss handling for all sheets
+    let startY = 0;
+    let currentY = 0;
+    let isDragging = false;
+    let activeSheetEl = null;
+
+    document.querySelectorAll('.modal-sheet').forEach(sheet => {
+      sheet.addEventListener('touchstart', (e) => {
+        // Only allow drag from top 60px (handle area)
+        const rect = sheet.getBoundingClientRect();
+        const touchY = e.touches[0].clientY - rect.top;
+        if (touchY < 60) {
+          isDragging = true;
+          startY = e.touches[0].clientY;
+          activeSheetEl = sheet;
+          sheet.style.transition = 'none';
+        }
+      }, { passive: false });
+
+      sheet.addEventListener('touchmove', (e) => {
+        if (!isDragging || activeSheetEl !== sheet) return;
+        e.preventDefault(); // Prevent page scroll/refresh
+        currentY = e.touches[0].clientY - startY;
+        if (currentY > 0) {
+          sheet.style.transform = `translateY(${currentY}px)`;
+          // Fade backdrop as you drag
+          const opacity = Math.max(0, 1 - (currentY / 300));
+          document.getElementById('modalBackdrop').style.opacity = opacity;
+        }
+      }, { passive: false });
+
+      sheet.addEventListener('touchend', () => {
+        if (!isDragging || activeSheetEl !== sheet) return;
+        isDragging = false;
+        sheet.style.transition = 'transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)';
+        
+        // If dragged more than 100px, close. Otherwise snap back.
+        if (currentY > 100) {
+          closeSheet();
+        } else {
+          sheet.style.transform = 'translateY(0)';
+          document.getElementById('modalBackdrop').style.opacity = '1';
+        }
+        currentY = 0;
+        activeSheetEl = null;
+      });
+    });
+
+    // Open temperature control sheet
+    function openSheet(body) {
+      currentBody = body;
+      const data = temps[body];
+      
+      document.getElementById('sheetTitle').textContent = body === 'pool' ? 'Pool' : 'Spa';
+      document.getElementById('currentTempValue').textContent = data.current + '°';
+      document.getElementById('setpointValue').innerHTML = data.setpoint + '<sup>°</sup>';
+      
+      // Update heat mode buttons
+      document.querySelectorAll('.heat-mode-option').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.mode === data.mode) {
+          btn.classList.add('active');
+        }
+      });
+      
+      document.getElementById('modalBackdrop').classList.add('open');
+      document.getElementById('tempSheet').classList.add('open');
+      document.body.classList.add('sheet-open');
+    }
+
+    // Close sheet
+    function closeSheet() {
+      document.getElementById('modalBackdrop').classList.remove('open');
+      document.getElementById('tempSheet').classList.remove('open');
+      document.getElementById('lightsSheet').classList.remove('open');
+      document.getElementById('circuitsSheet').classList.remove('open');
+      document.body.classList.remove('sheet-open');
+      
+      // Reset all sheet positions
+      document.querySelectorAll('.modal-sheet').forEach(s => {
+        s.style.transform = '';
+      });
+      document.getElementById('modalBackdrop').style.opacity = '';
+      
+      activeSheet = null;
+      
+      // Update main display
+      updateMainDisplay();
+    }
+
+    // Open circuits sheet
+    function openCircuitsSheet() {
+      document.getElementById('modalBackdrop').classList.add('open');
+      document.getElementById('circuitsSheet').classList.add('open');
+      document.body.classList.add('sheet-open');
+      activeSheet = 'circuits';
+    }
+
+    // Toggle circuit
+    function toggleCircuit(btn) {
+      btn.classList.toggle('active');
+      const statusEl = btn.querySelector('.circuit-full-status');
+      const circuitId = btn.dataset.circuit;
+      
+      if (btn.classList.contains('active')) {
+        // Set appropriate RPM based on circuit
+        const rpms = {
+          '1': '3000 RPM',  // Spa
+          '2': '2000 RPM',  // Polaris
+          '3': 'On',        // Jets
+          '4': 'On',        // Lights
+          '5': 'On',        // Waterfall Light
+          '6': '1000 RPM',  // Pool
+          '7': 'On',        // Waterfall
+          '8': '2850 RPM'   // High Speed
+        };
+        statusEl.textContent = rpms[circuitId] || 'On';
+      } else {
+        statusEl.textContent = 'Off';
+      }
+    }
+
+    // Adjust temperature
+    function adjustTemp(delta) {
+      const data = temps[currentBody];
+      const newTemp = Math.max(40, Math.min(104, data.setpoint + delta));
+      data.setpoint = newTemp;
+      document.getElementById('setpointValue').innerHTML = newTemp + '<sup>°</sup>';
+    }
+
+    // Set heat mode
+    function setHeatMode(btn) {
+      document.querySelectorAll('.heat-mode-option').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      temps[currentBody].mode = btn.dataset.mode;
+    }
+
+    // Lights state
+    let lightsState = {
+      on: false,
+      color: 'blue',
+      mode: null
+    };
+
+    // Open lights sheet
+    function openLightsSheet() {
+      // Update UI to match state
+      const toggle = document.getElementById('lightToggle');
+      const colorSection = document.getElementById('colorPickerSection');
+      const modesSection = document.getElementById('lightModesSection');
+      const statusText = document.getElementById('lightStatusText');
+      
+      if (lightsState.on) {
+        toggle.classList.add('active');
+        colorSection.classList.remove('disabled');
+        modesSection.classList.remove('disabled');
+        statusText.textContent = lightsState.mode ? lightsState.mode : lightsState.color.replace('-', ' ');
+        statusText.style.textTransform = 'capitalize';
+      } else {
+        toggle.classList.remove('active');
+        colorSection.classList.add('disabled');
+        modesSection.classList.add('disabled');
+        statusText.textContent = 'Off';
+      }
+      
+      document.getElementById('modalBackdrop').classList.add('open');
+      document.getElementById('lightsSheet').classList.add('open');
+      document.body.classList.add('sheet-open');
+      activeSheet = 'lights';
+    }
+
+    // Toggle lights
+    function toggleLights() {
+      lightsState.on = !lightsState.on;
+      const toggle = document.getElementById('lightToggle');
+      const colorSection = document.getElementById('colorPickerSection');
+      const modesSection = document.getElementById('lightModesSection');
+      const statusText = document.getElementById('lightStatusText');
+      const lightsBtn = document.getElementById('lightsBtn');
+      
+      if (lightsState.on) {
+        toggle.classList.add('active');
+        colorSection.classList.remove('disabled');
+        modesSection.classList.remove('disabled');
+        statusText.textContent = lightsState.color.replace('-', ' ');
+        statusText.style.textTransform = 'capitalize';
+        lightsBtn.classList.add('active');
+      } else {
+        toggle.classList.remove('active');
+        colorSection.classList.add('disabled');
+        modesSection.classList.add('disabled');
+        statusText.textContent = 'Off';
+        lightsBtn.classList.remove('active');
+      }
+    }
+
+    // Select color
+    function selectColor(btn) {
+      document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.light-mode-btn').forEach(m => m.classList.remove('active'));
+      btn.classList.add('active');
+      lightsState.color = btn.dataset.color;
+      lightsState.mode = null;
+      document.getElementById('lightStatusText').textContent = lightsState.color.replace('-', ' ');
+    }
+
+    // Select light mode
+    function selectLightMode(btn) {
+      document.querySelectorAll('.light-mode-btn').forEach(m => m.classList.remove('active'));
+      document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+      btn.classList.add('active');
+      lightsState.mode = btn.dataset.mode;
+      document.getElementById('lightStatusText').textContent = lightsState.mode;
+    }
+
+    // Track active sheet
+    let activeSheet = null;
+
+    // Update main dashboard display
+    function updateMainDisplay() {
+      // Pool setpoint
+      document.getElementById('pool-setpoint-display').textContent = temps.pool.setpoint + '°';
+      
+      // Pool heat pill
+      const poolHeatPill = document.getElementById('pool-heat-pill');
+      updateHeatPill(poolHeatPill, temps.pool.mode);
+      
+      // Spa heat pill
+      const spaHeatPill = document.getElementById('spa-heat-pill');
+      updateHeatPill(spaHeatPill, temps.spa.mode);
+    }
+    
+    function updateHeatPill(pill, mode) {
+      if (mode === 'off') {
+        pill.className = 'heat-pill off';
+        pill.innerHTML = '<span>Off</span>';
+      } else if (mode === 'solar') {
+        pill.className = 'heat-pill';
+        pill.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg><span>Solar</span>';
+      } else if (mode === 'heater') {
+        pill.className = 'heat-pill heater';
+        pill.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2c0 4-4 6-4 10a4 4 0 0 0 8 0c0-4-4-6-4-10z"/></svg><span>Heater</span>';
+      }
+    }
+  </script>
+</body>
+</html>

@@ -73,16 +73,37 @@ Based on API discovery (Jan 9, 2025):
 | **Connection** | Remote via Pentair Cloud |
 | **System Name** | `Pentair: F8-23-4F` |
 | **Pump** | IntelliFlo VS (450-3450 RPM, variable speed) |
-| **Heating** | Solar ✅ |
+| **Heating** | Solar ✅ + Gas Heater ✅ (shared) |
 | **Lights** | 2x IntelliBrite (8 colors) |
 | **Chlorinator** | None |
 | **Chemistry** | None |
+
+### Bodies
+| Index | ID | Name | Circuit | Solar | Gas Heater |
+|-------|-----|------|---------|-------|------------|
+| 0 | 1 | Pool | Circuit 6 | ✅ | ✅ (shared) |
+| 1 | 2 | Spa | Circuit 1 | ❌ | ✅ (shared) |
+
+**Note:** One gas heater is shared between pool and spa. Valves A & B route water flow.
 
 ### Temperature Ranges
 | Body | Min | Max |
 |------|-----|-----|
 | Pool | 40°F | 104°F |
 | Spa | 40°F | 104°F |
+
+### Heat Modes
+| Mode | Value | Pool | Spa | Description |
+|------|-------|------|-----|-------------|
+| Off | 0 | ✅ | ✅ | No heating |
+| Solar | 1 | ✅ | ❌ | Solar panels only |
+| Solar Preferred | 2 | ✅ | ❌ | Solar first, gas backup |
+| Heater | 3 | ✅ | ✅ | Gas heater |
+
+### API Body Mapping
+When calling `setSetPointAsync` or `setHeatModeAsync`:
+- `bodyIndex 0` → Pool (body.id 1)
+- `bodyIndex 1` → Spa (body.id 2)
 
 ### Circuits (8 total)
 | ID | Name | Type | Pump Speed | Interface |
