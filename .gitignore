@@ -1,5 +1,13 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
+# Agent/AI instructions (internal use only)
+AGENTS.md
+CLAUDE.md
+.claude/
+
+# Local config with credentials
+config.local.js
+
 # dependencies
 /node_modules
 /.pnp

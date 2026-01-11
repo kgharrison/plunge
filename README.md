@@ -6,6 +6,14 @@ A modern, mobile-first web app for controlling Pentair ScreenLogic / IntelliCent
 ![React](https://img.shields.io/badge/React-19-blue)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-38bdf8)
+![License](https://img.shields.io/badge/License-MIT-green)
+
+<p align="center">
+  <img src="docs/screenshots/home.png" width="200" alt="Home Screen" />
+  <img src="docs/screenshots/history.png" width="200" alt="History" />
+  <img src="docs/screenshots/schedules.png" width="200" alt="Schedules" />
+  <img src="docs/screenshots/settings.png" width="200" alt="Settings" />
+</p>
 
 ## Features
 
@@ -18,14 +26,6 @@ A modern, mobile-first web app for controlling Pentair ScreenLogic / IntelliCent
 - **Pump Settings** - Monitor pump status, RPM, watts, and configure high-speed override
 - **Circuit Configuration** - Edit circuit names, functions, interfaces, and freeze protection
 - **Egg Timer** - Quick run times for circuits (15min, 30min, 1hr, 2hr)
-
-## Screenshots
-
-The app features a dark, glass-morphism UI optimized for mobile devices with:
-- Liquid glass card effects
-- Animated temperature rings
-- Bottom sheet modals with drag-to-dismiss
-- Optimistic UI updates for responsive feel
 
 ## Tech Stack
 
@@ -177,11 +177,18 @@ npm run lint
 npm run build
 ```
 
+## Contributing
+
+Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details on:
+- Setting up your development environment
+- Code style guidelines
+- Pull request process
+
 ## License
 
-MIT
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
-- [node-screenlogic](https://github.com/parnic/node-screenlogic) - The excellent library that makes this possible
+- [node-screenlogic](https://github.com/parnic/node-screenlogic) - The excellent library that makes this possible (MIT License)
 - [Pentair](https://www.pentair.com/) - For the ScreenLogic protocol (unofficial/reverse-engineered)
