@@ -1,28 +1,24 @@
 <p align="center">
-  <img src="docs/logo.png" width="120" alt="Plunge Logo" />
+  <img src="docs/logo.png" width="80" alt="Plunge Logo" />
 </p>
-
 <h1 align="center">Plunge</h1>
-
 <p align="center">
-  A modern, mobile-first web app for controlling Pentair ScreenLogic / IntelliCenter pool systems.
+  <strong>A modern, mobile-first web app for controlling Pentair ScreenLogic / IntelliCenter pool systems.</strong>
+  <br /><br />
+  <a href="https://plunge.sh"><strong>Try the live demo →</strong></a>
+  <br /><br />
+  <img src="https://img.shields.io/badge/Next.js-16.1-black" alt="Next.js" />
+  <img src="https://img.shields.io/badge/React-19-blue" alt="React" />
+  <img src="https://img.shields.io/badge/TypeScript-5-blue" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/Tailwind-4-38bdf8" alt="Tailwind" />
+  <img src="https://img.shields.io/badge/License-MIT-green" alt="License" />
 </p>
 
 <p align="center">
-  <strong><a href="https://plunge.sh">Try the live demo at plunge.sh</a></strong>
-</p>
-
-![Next.js](https://img.shields.io/badge/Next.js-16.1-black)
-![React](https://img.shields.io/badge/React-19-blue)
-![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)
-![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-38bdf8)
-![License](https://img.shields.io/badge/License-MIT-green)
-
-<p align="center">
-  <img src="docs/screenshots/home.png" width="200" alt="Home Screen" />
-  <img src="docs/screenshots/history.png" width="200" alt="History" />
-  <img src="docs/screenshots/schedules.png" width="200" alt="Schedules" />
-  <img src="docs/screenshots/settings.png" width="200" alt="Settings" />
+  <img src="docs/screenshots/home.png" width="180" alt="Home Screen" />
+  <img src="docs/screenshots/history.png" width="180" alt="History" />
+  <img src="docs/screenshots/schedules.png" width="180" alt="Schedules" />
+  <img src="docs/screenshots/settings.png" width="180" alt="Settings" />
 </p>
 
 ## Features
