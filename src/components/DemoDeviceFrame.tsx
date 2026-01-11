@@ -52,6 +52,12 @@ function getServerSnapshot(): FrameState {
   return serverState;
 }
 
+// Export hook for other components to read rotation state
+export function useDeviceRotation(): boolean {
+  const state = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  return state.isRotated;
+}
+
 function updateGlobalState(updates: Partial<FrameState>) {
   globalState = { ...globalState, ...updates };
   notifyListeners();
@@ -443,12 +449,6 @@ export default function DemoDeviceFrame({ children }: DeviceFrameProps) {
         </div>
       </div>
 
-      {/* Footer hint */}
-      <div className="flex-shrink-0">
-        <p className="text-white/30 text-xs">
-          Drag to scroll • Tap to interact
-        </p>
-      </div>
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
+import { useDeviceRotation } from '@/components/DemoDeviceFrame';
 
 interface TempPoint {
   time: string;
@@ -843,9 +844,11 @@ export default function HistoryPage() {
   const endDateRef = useRef<Date>(endDate); // Track latest endDate for use in callbacks
   const [isDragging, setIsDragging] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const isLandscape = useDeviceRotation();
   
   // Demo mode: track the "now" from demo data (end of available data)
   const [demoNow, setDemoNow] = useState<Date | null>(null);
+  const demoNowRef = useRef<Date | null>(null);
   const demoInitializedRef = useRef(false);
   
   // Helper to get the effective "now" - use demoNow if in demo mode, otherwise real now
@@ -875,6 +878,15 @@ export default function HistoryPage() {
     if (cacheCheckedRef.current) return;
     cacheCheckedRef.current = true;
 
+    // Check for cache clear parameter
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('clearCache') === '1') {
+      localStorage.removeItem(HISTORY_CACHE_KEY);
+      // Remove the parameter from URL without reload
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
+    }
+
     const persistedCache = loadHistoryCache();
     if (persistedCache && persistedCache.timeRange === '24h') {
       cacheRef.current = {
@@ -883,12 +895,29 @@ export default function HistoryPage() {
         dataEnd: persistedCache.dataEnd,
         data: persistedCache.data,
       };
+      // If this looks like demo data (has demoDataEnd), set the refs
+      if (persistedCache.data.demoDataEnd) {
+        const demoEnd = new Date(persistedCache.data.demoDataEnd);
+        setDemoNow(demoEnd);
+        demoNowRef.current = demoEnd;
+        // Also set end date to demo end
+        setEndDate(demoEnd);
+        endDateRef.current = demoEnd;
+        demoInitializedRef.current = true;
+      }
       setHistory(persistedCache.data);
       setLoading(false);
     }
   }, []);
 
   const fetchHistory = useCallback(async (range: TimeRange, end: Date, forceRefresh: boolean | 'background' = false) => {
+    // In demo mode, we already have ALL data loaded - no need to fetch anything
+    // Just return early, the UI will re-render with the current history data
+    if (demoNowRef.current && !forceRefresh) {
+      setLoading(false);
+      return;
+    }
+    
     const isBackgroundRefresh = forceRefresh === 'background';
     const shouldForceRefresh = forceRefresh === true;
     
@@ -899,7 +928,9 @@ export default function HistoryPage() {
     
     // Check cache - if we have data covering the view window, use it (unless forcing refresh)
     let cache = cacheRef.current;
-    if (!shouldForceRefresh && !isBackgroundRefresh && cache && cache.timeRange === range) {
+    // In demo mode, cache contains ALL data so skip time range check (use ref to avoid stale closure)
+    const cacheTimeRangeMatches = demoNowRef.current || (cache && cache.timeRange === range);
+    if (!shouldForceRefresh && !isBackgroundRefresh && cache && cacheTimeRangeMatches) {
       // Check if cache covers the view window (with some tolerance for edge cases)
       const tolerance = 5 * 60 * 1000; // 5 minutes tolerance
       const cacheCoversView = cache.dataStart <= viewStart + tolerance && cache.dataEnd >= viewEnd - tolerance;
@@ -911,10 +942,13 @@ export default function HistoryPage() {
       }
       
       // If view is completely outside cache range (more than 1 range away), clear cache and fetch fresh
-      const rangeMs = hours * 60 * 60 * 1000;
-      if (viewEnd < cache.dataStart - rangeMs || viewStart > cache.dataEnd + rangeMs) {
-        cacheRef.current = null;
-        cache = null; // Also clear local reference
+      // But in demo mode, don't clear - we have all the data
+      if (!demoNowRef.current) {
+        const rangeMs = hours * 60 * 60 * 1000;
+        if (viewEnd < cache.dataStart - rangeMs || viewStart > cache.dataEnd + rangeMs) {
+          cacheRef.current = null;
+          cache = null; // Also clear local reference
+        }
       }
     }
     
@@ -955,6 +989,7 @@ export default function HistoryPage() {
       if (newData.demoDataEnd) {
         const demoEnd = new Date(newData.demoDataEnd);
         setDemoNow(demoEnd);
+        demoNowRef.current = demoEnd;
         // On first load in demo mode, set endDate to the demo data end (only once)
         if (!demoInitializedRef.current) {
           demoInitializedRef.current = true;
@@ -1006,6 +1041,7 @@ export default function HistoryPage() {
   }, []);
 
   // Check if cache covers a given view window (without triggering state updates)
+  // Uses refs to avoid stale closures
   const checkCacheCovers = useCallback((range: TimeRange, end: Date): boolean => {
     const rangeConfig = TIME_RANGES.find(r => r.value === range);
     const hours = rangeConfig?.hours || 24;
@@ -1013,14 +1049,24 @@ export default function HistoryPage() {
     const viewStart = viewEnd - hours * 60 * 60 * 1000;
     
     const cache = cacheRef.current;
-    if (!cache || cache.timeRange !== range) return false;
+    if (!cache) return false;
+    
+    // In demo mode (demoNowRef set), cache contains ALL data so skip time range check
+    // Otherwise require matching time range
+    if (!demoNowRef.current && cache.timeRange !== range) return false;
     
     const tolerance = 5 * 60 * 1000; // 5 minutes tolerance
     return cache.dataStart <= viewStart + tolerance && cache.dataEnd >= viewEnd - tolerance;
-  }, []);
+  }, []); // No dependencies - uses refs
 
   // Debounced fetch - triggers after drag stops
   const debouncedFetch = useCallback((range: TimeRange, end: Date) => {
+    // In demo mode, we have ALL data loaded - no fetching needed, ever
+    // The data is already in the `history` state, just let the UI re-render with new date range
+    if (demoNowRef.current) {
+      return;
+    }
+    
     // Clear any pending debounce
     if (fetchTimeoutRef.current) {
       clearTimeout(fetchTimeoutRef.current);
@@ -1043,20 +1089,105 @@ export default function HistoryPage() {
     }, 300);
   }, [fetchHistory, checkCacheCovers]);
 
-  // Initial fetch on mount - refresh in background if we have cached data
-  useEffect(() => {
-    const hasCachedData = cacheRef.current !== null;
-    // If we have cached data, fetch in background without loading indicator
-    // Otherwise show loading while fetching
-    if (hasCachedData) {
-      // Background refresh - don't show loading, will update data silently
-      fetchHistory(timeRange, endDate, 'background');
-    } else {
-      fetchHistory(timeRange, endDate);
+  // Preload all demo data - fetches without time range to get everything
+  const preloadDemoData = useCallback(async () => {
+    setLoading(true);
+    const credentials = loadCredentials();
+    
+    try {
+      // Fetch without time range params to get ALL demo data
+      const res = await fetch('/api/history', {
+        headers: getAuthHeaders(credentials),
+      });
+      if (!res.ok) throw new Error('Failed to fetch history');
+      const data: HistoryData = await res.json();
+      
+      // Check for demo mode
+      if (data.demoDataEnd) {
+        const demoEnd = new Date(data.demoDataEnd);
+        setDemoNow(demoEnd);
+        demoNowRef.current = demoEnd;
+
+        // Find the earliest data point to set cache range
+        const allTimes: number[] = [];
+        data.airTemps?.forEach(t => allTimes.push(new Date(t.time).getTime()));
+        data.poolTemps?.forEach(t => allTimes.push(new Date(t.time).getTime()));
+        data.poolRuns?.forEach(r => allTimes.push(new Date(r.on).getTime()));
+        data.spaRuns?.forEach(r => allTimes.push(new Date(r.on).getTime()));
+        data.heaterRuns?.forEach(r => allTimes.push(new Date(r.on).getTime()));
+        data.lightRuns?.forEach(r => allTimes.push(new Date(r.on).getTime()));
+        
+        const dataStart = allTimes.length > 0 ? Math.min(...allTimes) : demoEnd.getTime() - 30 * 24 * 60 * 60 * 1000;
+        const dataEnd = demoEnd.getTime();
+        
+        // Cache ALL data for ALL time ranges (use a special marker)
+        // We'll store with '24h' but the cache check will see it covers everything
+        // The cache.dataStart is used for clamping scroll bounds
+        cacheRef.current = {
+          timeRange: '24h',
+          dataStart,
+          dataEnd,
+          data,
+        };
+        
+        // Also save to localStorage for persistence
+        saveHistoryCache({
+          timeRange: '24h',
+          dataStart,
+          dataEnd,
+          data,
+          timestamp: Date.now(),
+        });
+        
+        // Set end date to demo end
+        if (!demoInitializedRef.current) {
+          demoInitializedRef.current = true;
+          setEndDate(demoEnd);
+          endDateRef.current = demoEnd;
+        }
+        
+        setHistory(data);
+        setLoading(false);
+        setError(null);
+        return true; // Successfully loaded demo data
+      }
+      
+      return false; // Not demo mode
+    } catch (err) {
+      console.error('Failed to preload demo data:', err);
+      return false;
     }
+  }, []);
+
+  // Initial fetch on mount - for demo mode, preload all data
+  useEffect(() => {
+    const initFetch = async () => {
+      const hasCachedData = cacheRef.current !== null;
+      
+      // Try to preload demo data first (will return false if not demo mode)
+      if (!hasCachedData) {
+        const isDemoPreloaded = await preloadDemoData();
+        if (isDemoPreloaded) return; // Demo data loaded, we're done
+      }
+      
+      // Not demo mode or already have cache - use normal fetch
+      if (hasCachedData) {
+        // Background refresh - don't show loading, will update data silently
+        fetchHistory(timeRange, endDate, 'background');
+      } else {
+        fetchHistory(timeRange, endDate);
+      }
+    };
+    
+    initFetch();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleTimeRangeChange = (range: TimeRange) => {
+    // In demo mode, just change the range - we have all data, no fetch needed
+    if (demoNow) {
+      setTimeRange(range);
+      return;
+    }
     // Clear cache when switching time ranges (different data density)
     if (range !== timeRange) {
       cacheRef.current = null;
@@ -1070,18 +1201,29 @@ export default function HistoryPage() {
     const rangeConfig = TIME_RANGES.find(r => r.value === timeRange);
     const hours = rangeConfig?.hours || 24;
     const deltaMs = hours * 60 * 60 * 1000;
-    
-    const newEndDate = new Date(endDate.getTime() + (direction === 'forward' ? deltaMs : -deltaMs));
-    
+
+    let newEndDate = new Date(endDate.getTime() + (direction === 'forward' ? deltaMs : -deltaMs));
+
     // Don't allow navigating into the future (use demoNow in demo mode)
     const now = getNow();
     if (newEndDate > now) {
-      setEndDate(now);
-      endDateRef.current = now;
-      fetchHistory(timeRange, now);
-    } else {
-      setEndDate(newEndDate);
-      endDateRef.current = newEndDate;
+      newEndDate = now;
+    }
+    
+    // In demo mode, don't allow navigating before earliest data (use cache bounds as source of truth)
+    const cache = cacheRef.current;
+    if (demoNow && cache) {
+      const minEndDate = new Date(cache.dataStart + hours * 60 * 60 * 1000);
+      if (newEndDate < minEndDate) {
+        newEndDate = minEndDate;
+      }
+    }
+    
+    setEndDate(newEndDate);
+    endDateRef.current = newEndDate;
+    
+    // In demo mode, no fetch needed - we have all data
+    if (!demoNow) {
       fetchHistory(timeRange, newEndDate);
     }
   };
@@ -1104,18 +1246,33 @@ export default function HistoryPage() {
 
   const handleTouchMove = (e: React.TouchEvent) => {
     if (!dragRef.current || !containerRef.current) return;
-    
+
     const deltaX = dragRef.current.startX - e.touches[0].clientX;
-    const containerWidth = containerRef.current.offsetWidth;
+    // Use getBoundingClientRect to get actual rendered width (accounts for CSS scale transforms)
+    const containerWidth = containerRef.current.getBoundingClientRect().width;
     const rangeConfig = TIME_RANGES.find(r => r.value === timeRangeRef.current);
     const hours = rangeConfig?.hours || 24;
-    
+
     const msPerPixel = (hours * 60 * 60 * 1000) / containerWidth;
     const deltaMs = deltaX * msPerPixel;
     
     const newEndDate = new Date(dragRef.current.startEndDate.getTime() + deltaMs);
     const now = getNowRef.current();
-    const clampedDate = newEndDate > now ? now : newEndDate;
+    
+    // Clamp to available range
+    let clampedDate = newEndDate > now ? now : newEndDate;
+    
+    // In demo mode, also clamp to earliest available data (use cache bounds as source of truth)
+    const cache = cacheRef.current;
+    if (demoNowRef.current && cache) {
+      const minEndDate = new Date(cache.dataStart + hours * 60 * 60 * 1000);
+      if (clampedDate < minEndDate) {
+        clampedDate = minEndDate;
+      }
+    }
+    
+    // Skip if date hasn't changed (e.g., already at boundary)
+    if (clampedDate.getTime() === endDateRef.current.getTime()) return;
     
     setEndDate(clampedDate);
     endDateRef.current = clampedDate;
@@ -1124,7 +1281,12 @@ export default function HistoryPage() {
 
   const handleTouchEnd = () => {
     if (dragRef.current) {
-      debouncedFetchRef.current(timeRangeRef.current, endDateRef.current);
+      // Only fetch if we actually moved
+      const startTime = dragRef.current.startEndDate.getTime();
+      const endTime = endDateRef.current.getTime();
+      if (startTime !== endTime) {
+        debouncedFetchRef.current(timeRangeRef.current, endDateRef.current);
+      }
     }
     dragRef.current = null;
     setIsDragging(false);
@@ -1142,7 +1304,8 @@ export default function HistoryPage() {
       if (!dragRef.current || !containerRef.current) return;
       
       const deltaX = dragRef.current.startX - e.clientX;
-      const containerWidth = containerRef.current.offsetWidth;
+      // Use getBoundingClientRect to get actual rendered width (accounts for CSS scale transforms)
+      const containerWidth = containerRef.current.getBoundingClientRect().width;
       const rangeConfig = TIME_RANGES.find(r => r.value === timeRangeRef.current);
       const hours = rangeConfig?.hours || 24;
       
@@ -1151,7 +1314,21 @@ export default function HistoryPage() {
       
       const newEndDate = new Date(dragRef.current.startEndDate.getTime() + deltaMs);
       const now = getNowRef.current();
-      const clampedDate = newEndDate > now ? now : newEndDate;
+      
+      // Clamp to available range
+      let clampedDate = newEndDate > now ? now : newEndDate;
+      
+      // In demo mode, also clamp to earliest available data (use cache bounds as source of truth)
+      const cache = cacheRef.current;
+      if (demoNowRef.current && cache) {
+        const minEndDate = new Date(cache.dataStart + hours * 60 * 60 * 1000);
+        if (clampedDate < minEndDate) {
+          clampedDate = minEndDate;
+        }
+      }
+      
+      // Skip if date hasn't changed (e.g., already at boundary)
+      if (clampedDate.getTime() === endDateRef.current.getTime()) return;
       
       setEndDate(clampedDate);
       endDateRef.current = clampedDate;
@@ -1160,7 +1337,12 @@ export default function HistoryPage() {
     
     const handleMouseUp = () => {
       if (dragRef.current) {
-        debouncedFetchRef.current(timeRangeRef.current, endDateRef.current);
+        // Only fetch if we actually moved
+        const startTime = dragRef.current.startEndDate.getTime();
+        const endTime = endDateRef.current.getTime();
+        if (startTime !== endTime) {
+          debouncedFetchRef.current(timeRangeRef.current, endDateRef.current);
+        }
       }
       dragRef.current = null;
       setIsDragging(false);
@@ -1174,6 +1356,56 @@ export default function HistoryPage() {
       window.removeEventListener('mouseup', handleMouseUp);
     };
   }, []);
+
+  // Wheel handler for two-finger horizontal scroll time navigation
+  // Must be attached manually with { passive: false } to allow preventDefault
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      // Only use horizontal scroll (deltaX) for time navigation
+      // Ignore vertical scroll to allow normal page scrolling
+      if (Math.abs(e.deltaX) < 5) return;
+
+      e.preventDefault();
+
+      const containerWidth = container.getBoundingClientRect().width;
+      const rangeConfig = TIME_RANGES.find(r => r.value === timeRangeRef.current);
+      const hours = rangeConfig?.hours || 24;
+
+      // Scale factor to make scroll feel natural
+      const scrollSensitivity = 2;
+      const msPerPixel = (hours * 60 * 60 * 1000) / containerWidth * scrollSensitivity;
+      const deltaMs = e.deltaX * msPerPixel;
+
+      const newEndDate = new Date(endDateRef.current.getTime() + deltaMs);
+      const now = getNowRef.current();
+      
+      // Clamp to available range: can't go past "now" or before earliest demo data
+      let clampedDate = newEndDate > now ? now : newEndDate;
+      
+      // In demo mode, also clamp to earliest available data (use cache bounds as source of truth)
+      const cache = cacheRef.current;
+      if (demoNowRef.current && cache) {
+        // Minimum end date = earliest data + view window size
+        const minEndDate = new Date(cache.dataStart + hours * 60 * 60 * 1000);
+        if (clampedDate < minEndDate) {
+          clampedDate = minEndDate;
+        }
+      }
+
+      // Skip if date hasn't changed (e.g., already at boundary)
+      if (clampedDate.getTime() === endDateRef.current.getTime()) return;
+
+      setEndDate(clampedDate);
+      endDateRef.current = clampedDate;
+      debouncedFetchRef.current(timeRangeRef.current, clampedDate);
+    };
+
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    return () => container.removeEventListener('wheel', handleWheel);
+  }, [mounted]); // Re-attach when mounted changes (container becomes available)
 
   // Format the date range for display
   const formatDateRange = () => {
@@ -1241,13 +1473,71 @@ export default function HistoryPage() {
     <div className="min-h-screen bg-black text-white pb-24">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-black/95 backdrop-blur-xl border-b border-white/10">
-        {/* Title Row */}
-        <div className="flex items-center px-5 pt-4 pb-3">
-          <h1 className="text-[32px] font-semibold tracking-tight leading-none">History</h1>
-        </div>
-        
-        {/* Time Range Selector with Navigation */}
-        <div className="flex items-center justify-center gap-3 px-4 pb-2">
+        {/* Title Row - in landscape, use grid for true centering */}
+        {isLandscape ? (
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center px-5 pt-4 pb-2">
+            {/* Left: Title */}
+            <h1 className="font-semibold tracking-tight leading-none text-[24px]">History</h1>
+            
+            {/* Center: Time Range Selector */}
+            <div className="flex items-center gap-2">
+              {/* Back chevron */}
+              <button
+                onClick={() => navigateTime('back')}
+                className="p-1.5 rounded-full bg-white/10 text-white/60 hover:bg-white/15 hover:text-white/80 transition-colors active:scale-95"
+                aria-label={`Go back ${timeRange}`}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-3.5 h-3.5">
+                  <path d="M15 18l-6-6 6-6" />
+                </svg>
+              </button>
+
+              {/* Time range buttons */}
+              <div className="flex gap-1">
+                {TIME_RANGES.map(range => (
+                  <button
+                    key={range.value}
+                    onClick={() => handleTimeRangeChange(range.value)}
+                    className={`px-3 py-1 rounded-full text-[12px] font-medium transition-colors ${
+                      timeRange === range.value
+                        ? 'bg-cyan-500 text-black'
+                        : 'bg-white/10 text-white/60'
+                    }`}
+                  >
+                    {range.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Forward chevron */}
+              <button
+                onClick={() => navigateTime('forward')}
+                disabled={isAtPresent}
+                className={`p-1.5 rounded-full transition-colors active:scale-95 ${
+                  isAtPresent
+                    ? 'bg-white/5 text-white/20 cursor-not-allowed'
+                    : 'bg-white/10 text-white/60 hover:bg-white/15 hover:text-white/80'
+                }`}
+                aria-label={`Go forward ${timeRange}`}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-3.5 h-3.5">
+                  <path d="M9 18l6-6-6-6" />
+                </svg>
+              </button>
+            </div>
+            
+            {/* Right: Empty spacer for balance */}
+            <div />
+          </div>
+        ) : (
+          <div className="flex items-center px-5 pt-4 pb-3">
+            <h1 className="font-semibold tracking-tight leading-none text-[32px]">History</h1>
+          </div>
+        )}
+
+        {/* Time Range Selector with Navigation - portrait only */}
+        {!isLandscape && (
+          <div className="flex items-center justify-center gap-3 px-4 pb-2">
           {/* Back chevron */}
           <button
             onClick={() => navigateTime('back')}
@@ -1258,7 +1548,7 @@ export default function HistoryPage() {
               <path d="M15 18l-6-6 6-6" />
             </svg>
           </button>
-          
+
           {/* Time range buttons */}
           <div className="flex gap-1">
             {TIME_RANGES.map(range => (
@@ -1275,14 +1565,14 @@ export default function HistoryPage() {
               </button>
             ))}
           </div>
-          
+
           {/* Forward chevron */}
           <button
             onClick={() => navigateTime('forward')}
             disabled={isAtPresent}
             className={`p-2 rounded-full transition-colors active:scale-95 ${
-              isAtPresent 
-                ? 'bg-white/5 text-white/20 cursor-not-allowed' 
+              isAtPresent
+                ? 'bg-white/5 text-white/20 cursor-not-allowed'
                 : 'bg-white/10 text-white/60 hover:bg-white/15 hover:text-white/80'
             }`}
             aria-label={`Go forward ${timeRange}`}
@@ -1292,9 +1582,10 @@ export default function HistoryPage() {
             </svg>
           </button>
         </div>
+        )}
         
         {/* Date Range Display */}
-        <div className="flex items-center justify-center gap-2 px-4 pb-3">
+        <div className="flex items-center justify-center gap-2 pb-3 px-4">
           <span className="text-[13px] text-white/50">{formatDateRange()}</span>
           {!isAtPresent && (
             <button
