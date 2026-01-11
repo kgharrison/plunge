@@ -1,9 +1,15 @@
-# Plunge
+<p align="center">
+  <img src="docs/logo.png" width="120" alt="Plunge Logo" />
+</p>
 
-A modern, mobile-first web app for controlling Pentair ScreenLogic / IntelliCenter pool systems.
+<h1 align="center">Plunge</h1>
 
 <p align="center">
-  <strong>🌊 <a href="https://plunge.sh">Try the live demo at plunge.sh</a></strong>
+  A modern, mobile-first web app for controlling Pentair ScreenLogic / IntelliCenter pool systems.
+</p>
+
+<p align="center">
+  <strong><a href="https://plunge.sh">Try the live demo at plunge.sh</a></strong>
 </p>
 
 ![Next.js](https://img.shields.io/badge/Next.js-16.1-black)
