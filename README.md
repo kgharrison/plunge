@@ -21,6 +21,8 @@
   <img src="docs/screenshots/settings.png" width="180" alt="Settings" />
 </p>
 
+> **⚠️ Early Beta** — This project is under active development. It works well for basic pool/spa control, but isn't yet built for every possible Pentair configuration. We're looking for contributors to help extend support for different equipment setups, improve configurability, and test with more systems. If you have a Pentair pool and want to help, check out [Contributing](#contributing)!
+
 ## Features
 
 - **Pool & Spa Control** - Toggle circuits, adjust temperatures, and set heat modes
