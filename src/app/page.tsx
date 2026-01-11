@@ -214,10 +214,10 @@ function TempRing({ current, setPoint, isActive }: { current: number; setPoint: 
   const offset = circumference * (1 - progress * 0.7);
 
   return (
-    <div className="relative w-[170px] h-[170px]">
+    <div className="relative w-[154px] h-[154px]">
       {isActive && (
         <div 
-          className="absolute top-1/2 left-1/2 w-[130px] h-[130px] -translate-x-1/2 -translate-y-1/2 rounded-full animate-pulse-glow"
+          className="absolute top-1/2 left-1/2 w-[118px] h-[118px] -translate-x-1/2 -translate-y-1/2 rounded-full animate-pulse-glow"
           style={{ background: 'radial-gradient(circle, rgba(0, 210, 211, 0.15) 0%, transparent 70%)' }}
         />
       )}
@@ -751,7 +751,7 @@ export default function Home() {
 
   return (
     <>
-      <div className="relative z-10 max-w-[430px] mx-auto px-4 pt-3 pb-24 min-h-dvh">
+      <div className="relative z-10 max-w-[430px] mx-auto px-4 pt-3 pb-20">
         {/* Header */}
         <header className="flex justify-between items-center py-2 animate-fade-in">
           <div>

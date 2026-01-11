@@ -1086,74 +1086,84 @@ export default function HistoryPage() {
     }
   };
 
-  // Drag handlers for time navigation
-  const handleDragStart = (clientX: number) => {
-    dragRef.current = { startX: clientX, startEndDate: endDate };
+  // Refs for drag state to avoid stale closures
+  const timeRangeRef = useRef(timeRange);
+  timeRangeRef.current = timeRange;
+  
+  const debouncedFetchRef = useRef(debouncedFetch);
+  debouncedFetchRef.current = debouncedFetch;
+  
+  const getNowRef = useRef(getNow);
+  getNowRef.current = getNow;
+
+  // Touch handlers
+  const handleTouchStart = (e: React.TouchEvent) => {
+    dragRef.current = { startX: e.touches[0].clientX, startEndDate: new Date(endDateRef.current) };
     setIsDragging(true);
   };
 
-  const handleDragMove = (clientX: number) => {
+  const handleTouchMove = (e: React.TouchEvent) => {
     if (!dragRef.current || !containerRef.current) return;
     
-    const deltaX = dragRef.current.startX - clientX;
+    const deltaX = dragRef.current.startX - e.touches[0].clientX;
     const containerWidth = containerRef.current.offsetWidth;
-    const rangeConfig = TIME_RANGES.find(r => r.value === timeRange);
+    const rangeConfig = TIME_RANGES.find(r => r.value === timeRangeRef.current);
     const hours = rangeConfig?.hours || 24;
     
-    // Map drag distance to time: full container width = full time range
     const msPerPixel = (hours * 60 * 60 * 1000) / containerWidth;
     const deltaMs = deltaX * msPerPixel;
     
     const newEndDate = new Date(dragRef.current.startEndDate.getTime() + deltaMs);
-    const now = getNow();
-    
-    // Clamp to not go into future (use demoNow in demo mode)
+    const now = getNowRef.current();
     const clampedDate = newEndDate > now ? now : newEndDate;
-    setEndDate(clampedDate);
-    endDateRef.current = clampedDate; // Keep ref in sync
     
-    // Use debounced fetch during drag
-    debouncedFetch(timeRange, clampedDate);
+    setEndDate(clampedDate);
+    endDateRef.current = clampedDate;
+    debouncedFetchRef.current(timeRangeRef.current, clampedDate);
   };
 
-  const handleDragEnd = () => {
-    const currentEndDate = endDateRef.current; // Use ref for latest value
+  const handleTouchEnd = () => {
     if (dragRef.current) {
-      // Trigger final fetch when drag ends - use ref for current value
-      debouncedFetch(timeRange, currentEndDate);
+      debouncedFetchRef.current(timeRangeRef.current, endDateRef.current);
     }
     dragRef.current = null;
     setIsDragging(false);
   };
 
-  // Touch handlers
-  const handleTouchStart = (e: React.TouchEvent) => {
-    handleDragStart(e.touches[0].clientX);
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    handleDragMove(e.touches[0].clientX);
-  };
-
-  const handleTouchEnd = () => {
-    handleDragEnd();
-  };
-
   // Mouse handlers
   const handleMouseDown = (e: React.MouseEvent) => {
-    handleDragStart(e.clientX);
+    dragRef.current = { startX: e.clientX, startEndDate: new Date(endDateRef.current) };
+    setIsDragging(true);
     e.preventDefault();
   };
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      if (dragRef.current) {
-        handleDragMove(e.clientX);
-      }
+      if (!dragRef.current || !containerRef.current) return;
+      
+      const deltaX = dragRef.current.startX - e.clientX;
+      const containerWidth = containerRef.current.offsetWidth;
+      const rangeConfig = TIME_RANGES.find(r => r.value === timeRangeRef.current);
+      const hours = rangeConfig?.hours || 24;
+      
+      const msPerPixel = (hours * 60 * 60 * 1000) / containerWidth;
+      const deltaMs = deltaX * msPerPixel;
+      
+      const newEndDate = new Date(dragRef.current.startEndDate.getTime() + deltaMs);
+      const now = getNowRef.current();
+      const clampedDate = newEndDate > now ? now : newEndDate;
+      
+      setEndDate(clampedDate);
+      endDateRef.current = clampedDate;
+      debouncedFetchRef.current(timeRangeRef.current, clampedDate);
     };
     
     const handleMouseUp = () => {
-      handleDragEnd();
+      if (dragRef.current) {
+        debouncedFetchRef.current(timeRangeRef.current, endDateRef.current);
+      }
+      dragRef.current = null;
+      setIsDragging(false);
     };
     
     window.addEventListener('mousemove', handleMouseMove);
@@ -1163,7 +1173,7 @@ export default function HistoryPage() {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [timeRange]);
+  }, []);
 
   // Format the date range for display
   const formatDateRange = () => {
@@ -1305,7 +1315,7 @@ export default function HistoryPage() {
 
       <div 
         ref={containerRef}
-        className="px-5 py-4 cursor-grab active:cursor-grabbing select-none relative"
+        className="px-5 py-4 select-none relative"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}

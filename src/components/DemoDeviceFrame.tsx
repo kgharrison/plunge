@@ -117,6 +117,11 @@ export default function DemoDeviceFrame({ children }: DeviceFrameProps) {
   
   const [isCapturing, setIsCapturing] = useState(false);
   
+  // Touch indicator state
+  const [touchPos, setTouchPos] = useState({ x: 0, y: 0 });
+  const [isInScreen, setIsInScreen] = useState(false);
+  const [isPressed, setIsPressed] = useState(false);
+  
   const deviceFrameRef = useRef<HTMLDivElement>(null);
   const screenRef = useRef<HTMLDivElement>(null);
 
@@ -186,6 +191,73 @@ export default function DemoDeviceFrame({ children }: DeviceFrameProps) {
       setIsCapturing(false);
     }
   }, [isRotated, isCapturing, totalWidth, totalHeight]);
+
+  // Touch indicator and drag-to-scroll for the screen area
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const dragScrollRef = useRef<{ startX: number; startY: number; scrollLeft: number; scrollTop: number } | null>(null);
+
+  useEffect(() => {
+    const screen = screenRef.current;
+    const scrollContainer = scrollContainerRef.current;
+    if (!screen || !scrollContainer || isMobile) return;
+
+    const getScaledPosition = (e: MouseEvent) => {
+      const rect = screen.getBoundingClientRect();
+      return {
+        x: (e.clientX - rect.left) / scale,
+        y: (e.clientY - rect.top) / scale,
+      };
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const pos = getScaledPosition(e);
+      setTouchPos(pos);
+      
+      // Handle drag-to-scroll
+      if (dragScrollRef.current) {
+        const deltaX = (e.clientX - dragScrollRef.current.startX) / scale;
+        const deltaY = (e.clientY - dragScrollRef.current.startY) / scale;
+        scrollContainer.scrollLeft = dragScrollRef.current.scrollLeft - deltaX;
+        scrollContainer.scrollTop = dragScrollRef.current.scrollTop - deltaY;
+      }
+    };
+
+    const handleMouseEnter = () => setIsInScreen(true);
+    const handleMouseLeave = () => {
+      setIsInScreen(false);
+      setIsPressed(false);
+    };
+    
+    const handleMouseDown = (e: MouseEvent) => {
+      setIsPressed(true);
+      // Start drag-to-scroll
+      dragScrollRef.current = {
+        startX: e.clientX,
+        startY: e.clientY,
+        scrollLeft: scrollContainer.scrollLeft,
+        scrollTop: scrollContainer.scrollTop,
+      };
+    };
+    
+    const handleMouseUp = () => {
+      setIsPressed(false);
+      dragScrollRef.current = null;
+    };
+
+    screen.addEventListener('mousemove', handleMouseMove);
+    screen.addEventListener('mouseenter', handleMouseEnter);
+    screen.addEventListener('mouseleave', handleMouseLeave);
+    screen.addEventListener('mousedown', handleMouseDown);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      screen.removeEventListener('mousemove', handleMouseMove);
+      screen.removeEventListener('mouseenter', handleMouseEnter);
+      screen.removeEventListener('mouseleave', handleMouseLeave);
+      screen.removeEventListener('mousedown', handleMouseDown);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [scale, isMobile]);
 
   // On mobile (after mount confirmed), render children directly without frame
   if (mounted && isMobile) {
@@ -297,18 +369,44 @@ export default function DemoDeviceFrame({ children }: DeviceFrameProps) {
               contain: 'layout paint',
               isolation: 'isolate',
               transform: 'translateZ(0)',
+              cursor: 'none',
             }}
           >
+            {/* Content wrapper with cursor hidden and drag-to-scroll */}
             <div
-              className="relative bg-black"
+              ref={scrollContainerRef}
+              className="relative bg-black [&_*]:!cursor-none"
               style={{
                 width: frameWidth,
                 height: frameHeight,
                 overflow: 'auto',
+                cursor: 'none',
               }}
             >
               {children}
             </div>
+            
+            {/* Touch indicator circle - rendered outside content scroll area */}
+            <div
+              style={{
+                position: 'absolute',
+                left: touchPos.x,
+                top: touchPos.y,
+                width: 36,
+                height: 36,
+                borderRadius: '50%',
+                background: isPressed 
+                  ? 'radial-gradient(circle, rgba(0,210,211,0.6) 0%, rgba(0,210,211,0.3) 50%, transparent 70%)'
+                  : 'radial-gradient(circle, rgba(0,210,211,0.4) 0%, rgba(0,210,211,0.2) 50%, transparent 70%)',
+                border: isPressed ? '2px solid rgba(0,210,211,1)' : '2px solid rgba(0,210,211,0.6)',
+                boxShadow: isPressed ? '0 0 20px rgba(0,210,211,0.6)' : '0 0 10px rgba(0,210,211,0.3)',
+                transform: `translate(-50%, -50%) scale(${isPressed ? 0.85 : 1})`,
+                pointerEvents: 'none',
+                zIndex: 9999,
+                transition: 'transform 0.1s ease-out, background 0.1s ease-out, border-color 0.1s ease-out, box-shadow 0.1s ease-out',
+                opacity: isInScreen ? 1 : 0,
+              }}
+            />
           </div>
           
           {/* Side button (power) */}
