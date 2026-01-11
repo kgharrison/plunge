@@ -2,6 +2,10 @@
 
 A modern, mobile-first web app for controlling Pentair ScreenLogic / IntelliCenter pool systems.
 
+<p align="center">
+  <strong>🌊 <a href="https://plunge.sh">Try the live demo at plunge.sh</a></strong>
+</p>
+
 ![Next.js](https://img.shields.io/badge/Next.js-16.1-black)
 ![React](https://img.shields.io/badge/React-19-blue)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)
@@ -67,11 +71,24 @@ You can configure credentials in two ways:
 
 #### Option 1: Environment Variables (recommended for deployment)
 
-Create a `.env.local` file:
+Copy the example file and fill in your values:
 
 ```bash
+cp .env.example .env.local
+```
+
+Or create `.env.local` manually:
+
+```bash
+# Required for pool connection
 POOL_SYSTEM_NAME="Pentair: XX-XX-XX"
 POOL_PASSWORD="your-password"
+
+# Optional: Connection mode (local, remote, or both - default: both)
+POOL_CONNECTION_MODE=both
+
+# Optional: Enable demo mode without a real pool
+NEXT_PUBLIC_DEMO=false
 ```
 
 #### Option 2: In-App Login
