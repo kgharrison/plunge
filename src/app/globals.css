@@ -29,6 +29,16 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Hide scrollbars while maintaining scroll functionality */
+* {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+*::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
 html {
   background: var(--bg-base);
 }

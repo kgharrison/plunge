@@ -364,7 +364,7 @@ export default function SchedulesPage() {
         {/* Header */}
         <header className="flex justify-between items-center py-2 mb-4">
           <div>
-            <h1 className="text-[28px] font-semibold tracking-tight leading-none">Schedules</h1>
+            <h1 className="text-[32px] font-semibold tracking-tight leading-none">Schedules</h1>
             <p className="text-[14px] text-white/50 mt-1">Automation & Timers</p>
           </div>
           <button
@@ -410,7 +410,7 @@ export default function SchedulesPage() {
                     >
                       <div>
                         <div className="text-[16px] font-medium">{getCircuitName(schedule.circuitId)}</div>
-                        <div className="text-[14px] text-white/50">
+                        <div className="text-[14px] text-white/50 whitespace-nowrap">
                           {formatTime(schedule.startTime)} - {formatTime(schedule.stopTime)}
                         </div>
                         <div className="text-[12px] text-white/35 mt-0.5">{formatDays(schedule.dayMask)}</div>
@@ -437,7 +437,7 @@ export default function SchedulesPage() {
                     >
                       <div>
                         <div className="text-[16px] font-medium">{getCircuitName(schedule.circuitId)}</div>
-                        <div className="text-[14px] text-white/50">
+                        <div className="text-[14px] text-white/50 whitespace-nowrap">
                           {formatTime(schedule.startTime)} - {formatTime(schedule.stopTime)}
                         </div>
                       </div>

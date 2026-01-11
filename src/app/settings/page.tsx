@@ -320,7 +320,7 @@ export default function SettingsPage() {
       <div className="relative z-10 max-w-[430px] mx-auto px-4 pt-3 pb-24 min-h-dvh">
         {/* Header */}
         <header className="py-2 mb-4">
-          <h1 className="text-[28px] font-semibold tracking-tight leading-none">Settings</h1>
+          <h1 className="text-[32px] font-semibold tracking-tight leading-none">Settings</h1>
         </header>
 
         {/* Equipment Section - Show first when logged in */}

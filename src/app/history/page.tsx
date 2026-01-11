@@ -1230,9 +1230,10 @@ export default function HistoryPage() {
   return (
     <div className="min-h-screen bg-black text-white pb-24">
       {/* Header */}
-      <header className="sticky top-0 z-10 bg-black/80 backdrop-blur-xl border-b border-white/10">
-        <div className="flex items-center justify-center px-5 py-4">
-          <h1 className="text-[17px] font-semibold">History</h1>
+      <header className="sticky top-0 z-50 bg-black/95 backdrop-blur-xl border-b border-white/10">
+        {/* Title Row */}
+        <div className="flex items-center px-5 pt-4 pb-3">
+          <h1 className="text-[32px] font-semibold tracking-tight leading-none">History</h1>
         </div>
         
         {/* Time Range Selector with Navigation */}
@@ -1504,21 +1505,60 @@ export default function HistoryPage() {
                     return durationMs >= 60000; // At least 1 minute
                   });
                   
-                  // Round time to minute for dedup key (entries that display the same should be considered duplicates)
-                  const roundToMinute = (isoString: string) => {
-                    const d = new Date(isoString);
-                    d.setSeconds(0, 0);
-                    return d.getTime();
+                  // Merge overlapping/adjacent runs of the same type into continuous periods
+                  const mergeOverlappingRuns = (runs: { run: RunPeriod; type: string; color: string }[]): { run: RunPeriod; type: string; color: string }[] => {
+                    if (runs.length === 0) return [];
+                    
+                    // Group by type
+                    const byType = new Map<string, { run: RunPeriod; type: string; color: string }[]>();
+                    runs.forEach(item => {
+                      const existing = byType.get(item.type) || [];
+                      existing.push(item);
+                      byType.set(item.type, existing);
+                    });
+                    
+                    const merged: { run: RunPeriod; type: string; color: string }[] = [];
+                    
+                    // Merge overlapping runs for each type
+                    byType.forEach((items, type) => {
+                      // Sort by start time
+                      const sorted = items.sort((a, b) => 
+                        new Date(a.run.on).getTime() - new Date(b.run.on).getTime()
+                      );
+                      
+                      let current = sorted[0];
+                      
+                      for (let i = 1; i < sorted.length; i++) {
+                        const next = sorted[i];
+                        const currentEnd = new Date(current.run.off).getTime();
+                        const nextStart = new Date(next.run.on).getTime();
+                        const nextEnd = new Date(next.run.off).getTime();
+                        
+                        // If next run starts before or within 2 minutes of current end, merge them
+                        if (nextStart <= currentEnd + 120000) {
+                          // Extend current run to the later of the two end times
+                          current = {
+                            ...current,
+                            run: {
+                              on: current.run.on,
+                              off: nextEnd > currentEnd ? next.run.off : current.run.off,
+                            },
+                          };
+                        } else {
+                          // No overlap - save current and start new
+                          merged.push(current);
+                          current = next;
+                        }
+                      }
+                      
+                      // Don't forget the last one
+                      merged.push(current);
+                    });
+                    
+                    return merged;
                   };
                   
-                  // Dedupe by unique on+off+type combination (rounded to minute)
-                  const seen = new Set<string>();
-                  const deduped = validRuns.filter(item => {
-                    const key = `${item.type}-${roundToMinute(item.run.on)}-${roundToMinute(item.run.off)}`;
-                    if (seen.has(key)) return false;
-                    seen.add(key);
-                    return true;
-                  });
+                  const deduped = mergeOverlappingRuns(validRuns);
                   
                   return deduped
                     .sort((a, b) => new Date(b.run.on).getTime() - new Date(a.run.on).getTime())

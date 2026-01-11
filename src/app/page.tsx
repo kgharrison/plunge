@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useLayoutEffect, useState, useCallback, useRef } from 'react';
+import Link from 'next/link';
 
 // Cache for home page status data
 const STATUS_CACHE_KEY = 'plunge_status_cache';
@@ -213,10 +214,10 @@ function TempRing({ current, setPoint, isActive }: { current: number; setPoint: 
   const offset = circumference * (1 - progress * 0.7);
 
   return (
-    <div className="relative w-[140px] h-[140px]">
+    <div className="relative w-[170px] h-[170px]">
       {isActive && (
         <div 
-          className="absolute top-1/2 left-1/2 w-[102px] h-[102px] -translate-x-1/2 -translate-y-1/2 rounded-full animate-pulse-glow"
+          className="absolute top-1/2 left-1/2 w-[130px] h-[130px] -translate-x-1/2 -translate-y-1/2 rounded-full animate-pulse-glow"
           style={{ background: 'radial-gradient(circle, rgba(0, 210, 211, 0.15) 0%, transparent 70%)' }}
         />
       )}
@@ -235,7 +236,7 @@ function TempRing({ current, setPoint, isActive }: { current: number; setPoint: 
           style={{ filter: 'drop-shadow(0 0 6px rgba(0, 210, 211, 0.5))', transition: 'stroke-dashoffset 1s ease-out' }}
         />
       </svg>
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center whitespace-nowrap">
         <div className="text-[42px] font-light tracking-tight leading-none">
           {current}<sup className="text-[17px] text-white/55 ml-0.5">°</sup>
         </div>
@@ -752,13 +753,9 @@ export default function Home() {
     <>
       <div className="relative z-10 max-w-[430px] mx-auto px-4 pt-3 pb-24 min-h-dvh">
         {/* Header */}
-        <header className="flex justify-between items-start py-2 animate-fade-in">
+        <header className="flex justify-between items-center py-2 animate-fade-in">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <img src="/logo-192.png" alt="Plunge" className="w-8 h-8 -ml-[5px]" />
-              <h1 className="text-[32px] font-semibold tracking-tight leading-none">Plunge</h1>
-            </div>
-            <div className="flex items-center gap-2 text-[15px] text-white/55 ml-[7px]">
+            <div className="flex items-center gap-2 text-[15px] text-white/55 mb-1 ml-[6px]">
               {loading && !status ? (
                 <span>{connectingPhase === 'local' ? 'Connecting locally...' : 'Connecting remotely...'}</span>
               ) : error && !status ? (
@@ -770,9 +767,13 @@ export default function Home() {
                 </>
               )}
             </div>
+            <div className="flex items-center gap-2">
+              <img src="/logo-192.png" alt="Plunge" className="w-8 h-8 -ml-[5px]" />
+              <h1 className="text-[32px] font-semibold tracking-tight leading-none">Plunge</h1>
+            </div>
           </div>
           <div className="text-right">
-            <div className="text-[13px] text-white/35 leading-none mb-0.5">Outside</div>
+            <div className="text-[15px] text-white/55 leading-none mb-0.5">Outside</div>
             <div className="text-[20px] font-medium text-white/55">{status?.airTemp || '--'}°</div>
           </div>
         </header>
@@ -1059,18 +1060,18 @@ export default function Home() {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
           <span>Home</span>
         </button>
-        <a href="/schedules" className="nav-item">
+        <Link href="/schedules" className="nav-item">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           <span>Schedules</span>
-        </a>
-        <a href="/history" className="nav-item">
+        </Link>
+        <Link href="/history" className="nav-item">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 3v18h18"/><path d="M7 16l4-4 4 4 5-6"/></svg>
           <span>History</span>
-        </a>
-        <a href="/settings" className="nav-item">
+        </Link>
+        <Link href="/settings" className="nav-item">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           <span>Settings</span>
-        </a>
+        </Link>
       </nav>
 
       {/* Modal Backdrop */}
