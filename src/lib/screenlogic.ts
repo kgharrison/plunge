@@ -1,10 +1,23 @@
 /**
  * ScreenLogic connection wrapper for Next.js
  * Supports both local WiFi and remote cloud connections
+ * 
+ * Environment variable POOL_CONNECTION_MODE controls connection behavior:
+ *   - 'local'  : Only try local WiFi connections (faster, requires same network)
+ *   - 'remote' : Only try remote cloud connections (works anywhere, slower)
+ *   - 'both'   : Try local first, fall back to remote (default)
  */
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const ScreenLogic = require('node-screenlogic');
+
+// Connection mode from environment variable
+export type ConnectionMode = 'local' | 'remote' | 'both';
+export const CONNECTION_MODE: ConnectionMode = (() => {
+  const mode = process.env.POOL_CONNECTION_MODE?.toLowerCase();
+  if (mode === 'local' || mode === 'remote') return mode;
+  return 'both'; // default
+})();
 
 // Connection tracking for debugging
 let connectionCounter = 0;
@@ -219,11 +232,17 @@ export async function getConnectionInfo(credentials: Credentials, skipLocalDisco
     return cachedConnectionInfo;
   }
 
-  // Skip local discovery if requested (faster remote connection)
-  if (!skipLocalDiscovery) {
+  // Check connection mode from environment variable
+  const shouldTryLocal = CONNECTION_MODE !== 'remote' && !skipLocalDiscovery;
+  const shouldTryRemote = CONNECTION_MODE !== 'local';
+
+  log(`getConnectionInfo: mode=${CONNECTION_MODE}, tryLocal=${shouldTryLocal}, tryRemote=${shouldTryRemote}`);
+
+  // Try local discovery if allowed
+  if (shouldTryLocal) {
     // Try local discovery first - give it enough time to find local units
     const localUnits = await discoverLocalUnits(5000);
-    
+
     if (localUnits.length > 0) {
       // Found local unit - use it
       const unit = localUnits[0];
@@ -240,14 +259,19 @@ export async function getConnectionInfo(credentials: Credentials, skipLocalDisco
     }
   }
 
-  // No local unit found or skipped - use remote
-  log(`No local units found, using remote connection`);
-  cachedConnectionInfo = {
-    type: 'remote',
-    systemName: credentials.systemName
-  };
-  cacheExpiry = Date.now() + CACHE_TTL;
-  return cachedConnectionInfo;
+  // No local unit found or skipped - try remote if allowed
+  if (shouldTryRemote) {
+    log(`Using remote connection (mode=${CONNECTION_MODE})`);
+    cachedConnectionInfo = {
+      type: 'remote',
+      systemName: credentials.systemName
+    };
+    cacheExpiry = Date.now() + CACHE_TTL;
+    return cachedConnectionInfo;
+  }
+
+  // Local-only mode but no local units found
+  throw new Error(`No local units found and CONNECTION_MODE is set to 'local'`);
 }
 
 /**
@@ -260,7 +284,9 @@ export function clearConnectionCache(): void {
 
 // Timeout for history requests (30 days can take 30+ seconds)
 const HISTORY_TIMEOUT = 60000; // 60 seconds
-const CONNECTION_TIMEOUT = 15000; // 15 seconds for normal connections
+const LOCAL_CONNECTION_TIMEOUT = 15000; // 15 seconds for local connections
+const REMOTE_CONNECTION_TIMEOUT = 30000; // 30 seconds for remote connections (cloud has more latency)
+const REMOTE_NET_TIMEOUT = 30000; // 30 seconds for remote network operations
 
 /**
  * Create a connected client - handles both local and remote connections
@@ -278,10 +304,12 @@ async function createClient(credentials: Credentials, skipLocalDiscovery = false
   }
   
   const connectionId = ++connectionCounter;
-  log(`Creating connection #${connectionId}`, { skipLocalDiscovery, extendedTimeout });
+  log(`Creating connection #${connectionId}`, { skipLocalDiscovery, extendedTimeout, connectionMode: CONNECTION_MODE });
   
   // Set up a timeout to prevent hung connections from blocking the queue
-  const timeout = extendedTimeout ? HISTORY_TIMEOUT : CONNECTION_TIMEOUT;
+  // Use longer timeout for remote connections (cloud has more latency)
+  const baseTimeout = CONNECTION_MODE === 'local' ? LOCAL_CONNECTION_TIMEOUT : REMOTE_CONNECTION_TIMEOUT;
+  const timeout = extendedTimeout ? HISTORY_TIMEOUT : baseTimeout;
   
   // Wrap the entire connection process with a timeout
   const connectWithTimeout = async (): Promise<{ client: any; connectionType: 'local' | 'remote'; connectionId: number; release: () => void }> => {
@@ -349,6 +377,8 @@ async function createClient(credentials: Credentials, skipLocalDiscovery = false
 
       log(`Connection #${connectionId}: Connecting to unit`, { ipAddr: unit.ipAddr, port: unit.port });
       client.init(credentials.systemName, unit.ipAddr, unit.port, credentials.password);
+      // Set longer timeout for remote connections (cloud has more latency)
+      client.netTimeout = extendedTimeout ? HISTORY_TIMEOUT : REMOTE_NET_TIMEOUT;
       await client.connectAsync();
       activeConnections.set(connectionId, { type: 'remote', startTime: new Date() });
       log(`Connection #${connectionId}: Remote connection established`);
@@ -373,10 +403,12 @@ async function createClient(credentials: Credentials, skipLocalDiscovery = false
   } catch (err) {
     if (timeoutId) clearTimeout(timeoutId);
     
-    // If local connection failed, try remote
-    if ((err as Error).message?.includes('Local connection') || 
-        (err as Error).message?.includes('ECONNREFUSED') ||
-        (err as Error).message?.includes('ETIMEDOUT')) {
+    // If local connection failed, try remote (only if connection mode allows it)
+    const canFallbackToRemote = CONNECTION_MODE !== 'local';
+    if (canFallbackToRemote && 
+        ((err as Error).message?.includes('Local connection') || 
+         (err as Error).message?.includes('ECONNREFUSED') ||
+         (err as Error).message?.includes('ETIMEDOUT'))) {
       log(`Connection #${connectionId}: Local connection failed, trying remote`, { error: (err as Error).message });
       clearConnectionCache();
       releaseConnectionSlot(release);
@@ -474,14 +506,29 @@ export async function getPoolStatus(requestCredentials?: Credentials): Promise<P
  * Toggle a circuit on/off
  */
 export async function setCircuitState(circuitId: number, state: boolean, requestCredentials?: Credentials): Promise<void> {
-  log('setCircuitState: Starting', { circuitId, state });
+  log('setCircuitState: Starting', { circuitId, state, connectionMode: CONNECTION_MODE });
   const credentials = getCredentials(requestCredentials);
-  const { client, connectionId, release } = await createClient(credentials);
+  
+  let client, connectionId, release, connectionType;
+  try {
+    const result = await createClient(credentials);
+    client = result.client;
+    connectionId = result.connectionId;
+    release = result.release;
+    connectionType = result.connectionType;
+    log(`setCircuitState: Connected (connection #${connectionId}, type: ${connectionType})`);
+  } catch (err) {
+    log(`setCircuitState: Failed to create client`, { error: (err as Error).message });
+    throw err;
+  }
 
   try {
-    log(`setCircuitState: Setting circuit state (connection #${connectionId})`);
+    log(`setCircuitState: Sending command (connection #${connectionId}, type: ${connectionType})`);
     await client.circuits.setCircuitStateAsync(circuitId, state ? 1 : 0);
     log(`setCircuitState: Circuit state set successfully`);
+  } catch (err) {
+    log(`setCircuitState: Command failed`, { error: (err as Error).message, connectionType });
+    throw err;
   } finally {
     await closeClient(client, connectionId, release);
   }

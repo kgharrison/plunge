@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getConnectionInfo, clearConnectionCache, discoverLocalUnits, getCredentials } from '@/lib/screenlogic';
+import { getConnectionInfo, clearConnectionCache, discoverLocalUnits, getCredentials, CONNECTION_MODE } from '@/lib/screenlogic';
 import { getCredentialsFromRequest, isDemoMode } from '@/lib/api-utils';
 
 export async function GET(request: NextRequest) {
@@ -11,6 +11,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         type: 'demo',
         systemName: 'demo',
+        connectionMode: 'demo',
         localAvailable: false,
         localUnits: []
       });
@@ -18,10 +19,13 @@ export async function GET(request: NextRequest) {
     
     const credentials = getCredentials(requestCredentials);
     const connInfo = await getConnectionInfo(credentials);
-    const localUnits = await discoverLocalUnits(1500);
+    
+    // Only discover local units if connection mode allows local connections
+    const localUnits = CONNECTION_MODE !== 'remote' ? await discoverLocalUnits(1500) : [];
     
     return NextResponse.json({
       ...connInfo,
+      connectionMode: CONNECTION_MODE,
       localAvailable: localUnits.length > 0,
       localUnits: localUnits.map(u => ({
         address: u.address,
